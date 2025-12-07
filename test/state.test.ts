@@ -3,7 +3,7 @@ import * as state from '../src/state';
 import fs from 'fs-extra';
 import path from 'path';
 
-const TEST_STATE_FILE = '.test-task-memory.json';
+const TEST_STATE_FILE = '.test-always-commit.json';
 
 describe('State Management', () => {
     beforeEach(async () => {

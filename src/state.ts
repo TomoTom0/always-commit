@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 
-export let STATE_FILE = '.task-memory.json';
+export let STATE_FILE = path.join('.git', 'always-commit.json');
 
 export function setStateFile(path: string) {
     STATE_FILE = path;
