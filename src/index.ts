@@ -20,8 +20,9 @@ Example:
   `)
     .action(async (message) => {
         try {
-            const hash = await git.commitAll(message);
-            await state.addCommit(hash, message);
+            const fullMessage = `--alcom-- ${message}`;
+            const hash = await git.commitAll(fullMessage);
+            await state.addCommit(hash, fullMessage);
             console.log(JSON.stringify({ status: 'ok', action: 'save', hash }));
         } catch (error: any) {
             console.log(JSON.stringify({ status: 'error', message: error.message }));
@@ -87,6 +88,110 @@ Example:
             console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: finalHash }));
         } catch (error: any) {
             console.log(JSON.stringify({ status: 'error', message: error.message }));
+            process.exit(1);
+        }
+    });
+
+program
+    .command('base-hash')
+    .description('Get the hash of the commit before the first snapshot.')
+    .action(async () => {
+        try {
+            const firstCommit = await state.getFirstCommit();
+            if (!firstCommit) {
+                throw new Error('No active session (no snapshots found)');
+            }
+            const baseHash = await git.getParentHash(firstCommit.hash);
+            console.log(baseHash);
+        } catch (error: any) {
+            console.error(error.message);
+            process.exit(1);
+        }
+    });
+
+
+
+program
+    .command('git')
+    .description('Run a git command with @base placeholder support.')
+    .argument('<args...>', 'Git arguments')
+    .allowUnknownOption()
+    .action(async (args: string[]) => {
+        try {
+            const firstCommit = await state.getFirstCommit();
+            let baseHash = 'HEAD'; // Default if no session, though maybe should error?
+
+            if (firstCommit) {
+                baseHash = await git.getParentHash(firstCommit.hash);
+            }
+
+            const processedArgs = args.map(arg => arg.replace('@base', baseHash));
+
+            const proc = Bun.spawn(['git', ...processedArgs], {
+                stdin: 'inherit',
+                stdout: 'inherit',
+                stderr: 'inherit',
+            });
+
+            const exitCode = await proc.exited;
+            process.exit(exitCode);
+        } catch (error: any) {
+            console.error(error.message);
+            process.exit(1);
+        }
+    });
+
+
+
+program
+    .command('status')
+    .description('Show changed files since the session started (alias for `git diff --name-status @base`).')
+    .action(async () => {
+        // Re-use logic or just spawn? Spawning is easier to keep DRY if I extract the runner, but for now just copy-paste or call the action if possible.
+        // Commander actions are functions.
+        // Let's just spawn directly to avoid argument parsing issues.
+        try {
+            const firstCommit = await state.getFirstCommit();
+            if (!firstCommit) {
+                console.log("No active session.");
+                return;
+            }
+            const baseHash = await git.getParentHash(firstCommit.hash);
+
+            const proc = Bun.spawn(['git', 'diff', '--name-status', baseHash], {
+                stdin: 'inherit',
+                stdout: 'inherit',
+                stderr: 'inherit',
+            });
+            const exitCode = await proc.exited;
+            process.exit(exitCode);
+        } catch (error: any) {
+            console.error(error.message);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('diff')
+    .description('Show changes since the session started (alias for `git diff @base`).')
+    .action(async () => {
+        try {
+            const firstCommit = await state.getFirstCommit();
+            if (!firstCommit) {
+                console.log("No active session.");
+                return;
+            }
+            const baseHash = await git.getParentHash(firstCommit.hash);
+
+            const proc = Bun.spawn(['git', 'diff', baseHash], {
+                stdin: 'inherit',
+                stdout: 'inherit',
+                stderr: 'inherit',
+            });
+            const exitCode = await proc.exited;
+            process.exit(exitCode);
+        } catch (error: any) {
+            console.error(error.message);
             process.exit(1);
         }
     });
