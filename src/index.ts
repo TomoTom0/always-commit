@@ -8,7 +8,13 @@ const program = new Command();
 program
     .name('always-commit')
     .description('A tool to manage temporary git snapshots during LLM-assisted coding sessions.')
-    .version('0.0.1');
+    .version('0.0.1')
+    .addHelpText('after', `
+Examples:
+  $ always-commit save "WIP: refactoring"
+  $ always-commit status
+  $ always-commit finish "feat: complete refactoring"
+  `);
 
 program
     .command('save')
@@ -95,6 +101,11 @@ Example:
 program
     .command('base-hash')
     .description('Get the hash of the commit before the first snapshot.')
+    .addHelpText('after', `
+Example:
+  $ always-commit base-hash
+  > a1b2c3d4...
+  `)
     .action(async () => {
         try {
             const firstCommit = await state.getFirstCommit();
@@ -116,6 +127,15 @@ program
     .description('Run a git command with @base placeholder support.')
     .argument('<args...>', 'Git arguments')
     .allowUnknownOption()
+    .addHelpText('after', `
+Description:
+  Executes a git command. The string '@base' in the arguments will be replaced
+  with the hash of the commit before the session started.
+  
+Examples:
+  $ always-commit git diff --stat @base
+  $ always-commit git log --oneline @base..HEAD
+  `)
     .action(async (args: string[]) => {
         try {
             const firstCommit = await state.getFirstCommit();
@@ -146,6 +166,12 @@ program
 program
     .command('status')
     .description('Show changed files since the session started (alias for `git diff --name-status @base`).')
+    .addHelpText('after', `
+Example:
+  $ always-commit status
+  M  src/index.ts
+  A  docs/new-doc.md
+  `)
     .action(async () => {
         // Re-use logic or just spawn? Spawning is easier to keep DRY if I extract the runner, but for now just copy-paste or call the action if possible.
         // Commander actions are functions.
@@ -174,6 +200,10 @@ program
 program
     .command('diff')
     .description('Show changes since the session started (alias for `git diff @base`).')
+    .addHelpText('after', `
+Example:
+  $ always-commit diff
+  `)
     .action(async () => {
         try {
             const firstCommit = await state.getFirstCommit();

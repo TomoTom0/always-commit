@@ -46,4 +46,36 @@ bun run src/index.ts finish <message>
 - **動作**:
     1.  ブランチを最初のスナップショット前の状態にリセット（mixed reset）し、ファイル変更は保持します。
     2.  内部状態をクリアします。
-    3.  指定されたメッセージで新しいコミットを作成します。
+### `base-hash`
+
+現在のセッション（最初の一時スナップショット）の直前のコミットハッシュを表示します。
+
+```bash
+alcom base-hash
+```
+
+### `git` (パススルー)
+
+Gitコマンドを実行します。引数内の `@base` は、セッション開始時のコミットハッシュに置換されます。
+
+```bash
+alcom git diff --stat @base
+```
+
+### `status`
+
+セッション開始時から現在までの変更ファイル一覧を表示します。
+`alcom git diff --name-status @base` のエイリアスです。
+
+```bash
+alcom status
+```
+
+### `diff`
+
+セッション開始時から現在までの変更内容を表示します。
+`alcom git diff @base` のエイリアスです。
+
+```bash
+alcom diff
+```
