@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import * as git from './git';
 import * as state from './state';
+import { isAllowed } from './config';
 
 const program = new Command();
 
@@ -9,6 +10,7 @@ program
     .name('always-commit')
     .description('A tool to manage temporary git snapshots during LLM-assisted coding sessions.')
     .version('0.0.1')
+    .option('-d, --dry-run', 'Simulate the command without making any changes')
     .addHelpText('after', `
 Examples:
   $ always-commit save "WIP: refactoring"
@@ -20,14 +22,34 @@ program
     .command('save')
     .description('Save a temporary snapshot of the current working directory.')
     .argument('[message]', 'Commit message for the snapshot', 'WIP: snapshot')
+    .option('-f, --force', 'Force commit even if there are no changes')
     .addHelpText('after', `
 Example:
   $ always-commit save "WIP: refactoring user auth"
   `)
-    .action(async (message) => {
+    .action(async (message, cmdOptions) => {
         try {
+            if (!await isAllowed()) {
+                console.error('Operation disallowed by ALCOM_ALLOW configuration.');
+                process.exit(1);
+            }
+
+            const globalOptions = program.opts();
+            const options = { ...globalOptions, ...cmdOptions };
             const fullMessage = `--alcom-- ${message}`;
-            const hash = await git.commitAll(fullMessage);
+
+            if (options.dryRun) {
+                console.log(`[Dry Run] Would save snapshot with message: "${fullMessage}"`);
+                return;
+            }
+
+            const hasChanges = await git.hasChanges();
+            if (!hasChanges && !options.force) {
+                console.log(JSON.stringify({ status: 'skipped', message: 'No changes detected' }));
+                return;
+            }
+
+            const hash = await git.commitAll(fullMessage, options.force);
             await state.addCommit(hash, fullMessage);
             console.log(JSON.stringify({ status: 'ok', action: 'save', hash }));
         } catch (error: any) {
@@ -46,7 +68,15 @@ Description:
   `)
     .action(async () => {
         try {
-            const lastCommit = await state.popCommit();
+            if (!await isAllowed()) {
+                console.error('Operation disallowed by ALCOM_ALLOW configuration.');
+                process.exit(1);
+            }
+
+            const options = program.opts();
+
+            // Peek at the last commit first
+            const lastCommit = await state.getLastCommit();
             if (!lastCommit) {
                 throw new Error('No snapshots to undo');
             }
@@ -57,6 +87,14 @@ Description:
             }
 
             const parentHash = await git.getParentHash(lastCommit.hash);
+
+            if (options.dryRun) {
+                console.log(`[Dry Run] Would undo snapshot ${lastCommit.hash} and reset to ${parentHash}`);
+                return;
+            }
+
+            // Actually pop and reset
+            await state.popCommit();
             await git.resetHard(parentHash);
 
             console.log(JSON.stringify({ status: 'ok', action: 'undo', hash: lastCommit.hash }));
@@ -81,12 +119,24 @@ Example:
   `)
     .action(async (message) => {
         try {
+            if (!await isAllowed()) {
+                console.error('Operation disallowed by ALCOM_ALLOW configuration.');
+                process.exit(1);
+            }
+
+            const options = program.opts();
             const firstCommit = await state.getFirstCommit();
             if (!firstCommit) {
                 throw new Error('No snapshots to finish');
             }
 
             const baseHash = await git.getParentHash(firstCommit.hash);
+
+            if (options.dryRun) {
+                console.log(`[Dry Run] Would reset mixed to ${baseHash}, clear state, and commit with message: "${message}"`);
+                return;
+            }
+
             await git.resetMixed(baseHash);
             await state.clearState();
 
@@ -94,6 +144,123 @@ Example:
             console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: finalHash }));
         } catch (error: any) {
             console.log(JSON.stringify({ status: 'error', message: error.message }));
+            process.exit(1);
+        }
+    });
+
+program
+    .command('auto-squash')
+    .description('Automatically squash save commits into subsequent manual commits.')
+    .addHelpText('after', `
+Description:
+  Rewrites history to merge 'save' commits into the manual commits that follow them.
+  Commit messages of manual commits are updated to indicate the merge.
+  Trailing 'save' commits (not followed by a manual commit) are preserved but re-parented.
+  
+Example:
+  $ always-commit auto-squash
+  `)
+    .action(async () => {
+        try {
+            if (!await isAllowed()) {
+                console.error('Operation disallowed by ALCOM_ALLOW configuration.');
+                process.exit(1);
+            }
+
+            const options = program.opts();
+            const firstCommit = await state.getFirstCommit();
+            if (!firstCommit) {
+                throw new Error('No active session (no snapshots found)');
+            }
+
+            const baseHash = await git.getParentHash(firstCommit.hash);
+            const commits = await git.getCommits(baseHash);
+
+            if (commits.length === 0) {
+                console.log("No commits to process.");
+                return;
+            }
+
+            // Group commits
+            // We want to group sequences of saves + 1 manual commit.
+            // Or just trailing saves.
+
+            let newHead = baseHash;
+            let pendingSaves: git.CommitInfo[] = [];
+            let actions: string[] = [];
+
+            for (const commit of commits) {
+                const isSave = commit.message.startsWith('--alcom--');
+
+                if (isSave) {
+                    pendingSaves.push(commit);
+                } else {
+                    // Manual commit found. Squash pending saves into this one.
+                    if (pendingSaves.length > 0) {
+                        const squashMsg = `\n\nsquash merged with ${pendingSaves.length} commits by always-commit`;
+                        const newMessage = commit.message + squashMsg;
+
+                        if (options.dryRun) {
+                            actions.push(`Squash ${pendingSaves.length} saves into manual commit ${commit.hash.substring(0, 7)} ("${commit.message}")`);
+                            actions.push(`  New message: "${newMessage.replace(/\n/g, '\\n')}"`);
+                            newHead = commit.hash; // In dry run, we just track logically
+                        } else {
+                            // Create new commit with manual commit's tree, but parent is current newHead
+                            newHead = await git.commitTree(commit.treeHash, newHead, newMessage);
+                        }
+                        pendingSaves = [];
+                    } else {
+                        // Just a manual commit without saves, but we need to re-parent it if history changed
+                        // Actually, if we are rewriting, we must rewrite everything after the first change.
+                        // Since we start from baseHash, we are rewriting everything.
+                        if (options.dryRun) {
+                            actions.push(`Pick manual commit ${commit.hash.substring(0, 7)} ("${commit.message}")`);
+                            newHead = commit.hash;
+                        } else {
+                            newHead = await git.commitTree(commit.treeHash, newHead, commit.message);
+                        }
+                    }
+                }
+            }
+
+            // Handle trailing saves
+            if (pendingSaves.length > 0) {
+                if (options.dryRun) {
+                    actions.push(`Keep ${pendingSaves.length} trailing saves:`);
+                    pendingSaves.forEach(s => actions.push(`  ${s.hash.substring(0, 7)}: ${s.message}`));
+                } else {
+                    for (const save of pendingSaves) {
+                        newHead = await git.commitTree(save.treeHash, newHead, save.message);
+                    }
+                }
+            }
+
+            if (options.dryRun) {
+                console.log("[Dry Run] Auto-squash plan:");
+                actions.forEach(a => console.log(`- ${a}`));
+            } else {
+                // Update branch pointer
+                const currentBranch = await git.getCurrentBranch();
+                await git.updateRef(`refs/heads/${currentBranch}`, newHead);
+
+                // Clear state because we rewrote history, so old hashes in state are invalid.
+                // Actually, should we clear state?
+                // If we squash, the "save" commits are gone or merged.
+                // So yes, the session is effectively "finished" or at least the old state is invalid.
+                // But wait, if there are trailing saves, they are still there, just with new hashes.
+                // If we want to continue the session, we should update the state with new hashes.
+                // But mapping old to new is complex if we squashed some.
+                // For simplicity, let's clear state and assume the user is "cleaning up".
+                // Or, we could just say "session cleared".
+                // The user request didn't specify, but "auto-squash" implies cleaning up.
+                // Let's clear state.
+                await state.clearState();
+
+                console.log(JSON.stringify({ status: 'ok', action: 'auto-squash', newHead }));
+            }
+
+        } catch (error: any) {
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });
@@ -138,6 +305,11 @@ Examples:
   `)
     .action(async (args: string[]) => {
         try {
+            if (!await isAllowed()) {
+                console.error('Operation disallowed by ALCOM_ALLOW configuration.');
+                process.exit(1);
+            }
+
             const firstCommit = await state.getFirstCommit();
             let baseHash = 'HEAD'; // Default if no session, though maybe should error?
 
@@ -222,6 +394,74 @@ Example:
             process.exit(exitCode);
         } catch (error: any) {
             console.error(error.message);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('log')
+    .description('List recent commits with filtering options.')
+    .option('-n, --number <count>', 'Number of commits to show', '10')
+    .option('-a, --all', 'Show all commits (default: only alcom save commits)')
+    .option('--manual-depth <count>', 'Include commits up to the N-th manual commit')
+    .addHelpText('after', `
+Example:
+  $ always-commit log
+  $ always-commit log --all
+  $ always-commit log --manual-depth 2
+  `)
+    .action(async (cmdOptions) => {
+        try {
+            const limit = parseInt(cmdOptions.number);
+            const showAll = cmdOptions.all || false;
+            const manualDepth = cmdOptions.manualDepth ? parseInt(cmdOptions.manualDepth) : undefined;
+
+            const rawCommits = await git.getLog(1000);
+
+            let commitsToShow: git.CommitInfo[] = [];
+
+            if (manualDepth !== undefined) {
+                let manualCount = 0;
+                let cutoffIndex = -1;
+                for (let i = 0; i < rawCommits.length; i++) {
+                    const commit = rawCommits[i];
+                    if (!commit) continue;
+                    const isSave = commit.message.startsWith('--alcom--');
+                    if (!isSave) {
+                        manualCount++;
+                    }
+                    if (manualCount >= manualDepth) {
+                        cutoffIndex = i;
+                        break;
+                    }
+                }
+
+                if (cutoffIndex !== -1) {
+                    commitsToShow = rawCommits.slice(0, cutoffIndex + 1);
+                } else {
+                    commitsToShow = rawCommits;
+                }
+
+                if (!showAll) {
+                    commitsToShow = commitsToShow.filter(c => c.message.startsWith('--alcom--'));
+                }
+            } else {
+                if (showAll) {
+                    commitsToShow = rawCommits;
+                } else {
+                    commitsToShow = rawCommits.filter(c => c.message.startsWith('--alcom--'));
+                }
+                commitsToShow = commitsToShow.slice(0, limit);
+            }
+
+            for (const commit of commitsToShow) {
+                const hash = commit.hash.substring(0, 7);
+                const msg = commit.message.length > 30 ? commit.message.substring(0, 27) + '...' : commit.message;
+                console.log(`${hash} ${msg}`);
+            }
+
+        } catch (error: any) {
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });

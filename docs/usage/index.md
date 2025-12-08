@@ -79,3 +79,42 @@ alcom status
 ```bash
 alcom diff
 ```
+
+### `log`
+
+直近のコミット履歴を表示します。デフォルトでは `alcom save` による自動保存コミットのみを表示します。
+
+```bash
+alcom log [options]
+```
+
+- **オプション**:
+    - `-n, --number <count>`: 表示するコミット数（デフォルト: 10）
+    - `-a, --all`: すべてのコミットを表示（手動コミットも含む）
+    - `--manual-depth <count>`: 直近のN個の手動コミットまでの履歴を表示
+
+**例**:
+
+```bash
+$ alcom log
+2d2facd test prefix
+...
+
+$ alcom log --all
+7fbc848 refactor: update docs and index
+2d2facd --alcom-- test prefix
+...
+```
+
+## 活用例
+
+### Claude Code Hook
+
+Claude Codeの `user_prompt_submit` フックなどで使用するスクリプト例です。プロンプトの冒頭30文字をコミットメッセージとして保存します。
+
+```bash
+#!/bin/bash
+input=$(cat)
+prompt=$(echo "$input" | jq -r .prompt | sed -E 's/^(.{30}).*$/\\1/')
+alcom save "$prompt"
+```
