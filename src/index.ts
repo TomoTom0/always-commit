@@ -108,6 +108,7 @@ program
     .command('finish')
     .description('Squash all temporary snapshots into a single clean commit.')
     .argument('<message>', 'Final commit message')
+    .option('-a, --append', 'Append messages of squashed commits to the final message')
     .addHelpText('after', `
 Description:
   Resets the branch to the state before the first snapshot (mixed reset),
@@ -116,8 +117,9 @@ Description:
   
 Example:
   $ always-commit finish "feat: implement user login"
+  $ always-commit finish "feat: implement user login" --append
   `)
-    .action(async (message) => {
+    .action(async (message, cmdOptions) => {
         try {
             if (!await isAllowed()) {
                 console.error('Operation disallowed by ALCOM_ALLOW configuration.');
@@ -132,15 +134,29 @@ Example:
 
             const baseHash = await git.getParentHash(firstCommit.hash);
 
+            let finalMessage = message;
+            if (cmdOptions.append) {
+                const commits = await git.getCommits(baseHash);
+                // Filter for alcom commits and extract messages
+                const commitMessages = commits
+                    .filter(c => c.message.startsWith('--alcom--'))
+                    .map(c => `- ${c.message.replace('--alcom-- ', '')}`);
+
+                if (commitMessages.length > 0) {
+                    finalMessage += '\n\n' + commitMessages.join('\n');
+                }
+            }
+
             if (options.dryRun) {
-                console.log(`[Dry Run] Would reset mixed to ${baseHash}, clear state, and commit with message: "${message}"`);
+                console.log(`[Dry Run] Would reset mixed to ${baseHash}, clear state, and commit with message:`);
+                console.log(finalMessage);
                 return;
             }
 
             await git.resetMixed(baseHash);
             await state.clearState();
 
-            const finalHash = await git.commitAll(message);
+            const finalHash = await git.commitAll(finalMessage);
             console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: finalHash }));
         } catch (error: any) {
             console.log(JSON.stringify({ status: 'error', message: error.message }));
