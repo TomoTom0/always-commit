@@ -472,8 +472,9 @@ Example:
 
             for (const commit of commitsToShow) {
                 const hash = commit.hash.substring(0, 7);
+                const date = commit.date;
                 const msg = commit.message.length > 30 ? commit.message.substring(0, 27) + '...' : commit.message;
-                console.log(`${hash} ${msg}`);
+                console.log(`${hash} ${date} ${msg}`);
             }
 
         } catch (error: any) {

@@ -37,6 +37,7 @@ export interface CommitInfo {
     parentHash: string;
     message: string;
     treeHash: string;
+    date: string;
 }
 
 export async function getCommits(baseHash: string, headHash: string = 'HEAD'): Promise<CommitInfo[]> {
@@ -49,7 +50,8 @@ export async function getCommits(baseHash: string, headHash: string = 'HEAD'): P
     // Let's use raw log for precision.
     const rawLog = await git.raw([
         'log',
-        '--pretty=format:%H|%P|%T|%s',
+        '--pretty=format:%H|%P|%T|%cd|%s',
+        '--date=format:%Y-%m-%d %H:%M:%S',
         `${baseHash}..${headHash}`,
         '--reverse' // Oldest first
     ]);
@@ -57,11 +59,12 @@ export async function getCommits(baseHash: string, headHash: string = 'HEAD'): P
     if (!rawLog.trim()) return [];
 
     return rawLog.split('\n').map(line => {
-        const [hash, parentHash, treeHash, ...messageParts] = line.split('|');
+        const [hash, parentHash, treeHash, date, ...messageParts] = line.split('|');
         return {
             hash: hash || '',
             parentHash: (parentHash || '').split(' ')[0] || '',
             treeHash: treeHash || '',
+            date: date || '',
             message: messageParts.join('|')
         };
     });
@@ -83,18 +86,20 @@ export async function getCurrentBranch(): Promise<string> {
 export async function getLog(maxCount: number = 100): Promise<CommitInfo[]> {
     const rawLog = await git.raw([
         'log',
-        '--pretty=format:%H|%P|%T|%s',
+        '--pretty=format:%H|%P|%T|%cd|%s',
+        '--date=format:%Y-%m-%d %H:%M:%S',
         `-n ${maxCount}`
     ]);
 
     if (!rawLog.trim()) return [];
 
     return rawLog.split('\n').map(line => {
-        const [hash, parentHash, treeHash, ...messageParts] = line.split('|');
+        const [hash, parentHash, treeHash, date, ...messageParts] = line.split('|');
         return {
             hash: hash || '',
             parentHash: (parentHash || '').split(' ')[0] || '',
             treeHash: treeHash || '',
+            date: date || '',
             message: messageParts.join('|')
         };
     });
