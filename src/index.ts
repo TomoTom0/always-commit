@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import * as git from './git';
 import * as state from './state';
+import * as session from './session';
 import { isAllowed } from './config';
 
 const program = new Command();
@@ -109,6 +110,7 @@ program
     .description('Squash all temporary snapshots into a single clean commit.')
     .argument('<message>', 'Final commit message')
     .option('-a, --append', 'Append messages of squashed commits to the final message')
+    .option('--base <hash>', 'Manually specify the base commit hash for recovery')
     .addHelpText('after', `
 Description:
   Resets the branch to the state before the first snapshot (mixed reset),
@@ -118,6 +120,7 @@ Description:
 Example:
   $ always-commit finish "feat: implement user login"
   $ always-commit finish "feat: implement user login" --append
+  $ always-commit finish "restored session" --base a1b2c3d
   `)
     .action(async (message, cmdOptions) => {
         try {
@@ -127,12 +130,24 @@ Example:
             }
 
             const options = program.opts();
-            const firstCommit = await state.getFirstCommit();
-            if (!firstCommit) {
-                throw new Error('No snapshots to finish');
+            let baseHash: string | undefined;
+
+            if (cmdOptions.base) {
+                baseHash = cmdOptions.base;
+            } else {
+                const currentSession = await session.getSession();
+                if (currentSession && currentSession.commits.length > 0) {
+                    const firstCommit = currentSession.commits[0];
+                    if (firstCommit) {
+                        baseHash = await git.getParentHash(firstCommit.hash);
+                    }
+                }
             }
 
-            const baseHash = await git.getParentHash(firstCommit.hash);
+            if (!baseHash) {
+                // Try session again just to be sure or error out
+                throw new Error('No active session found and no --base provided.');
+            }
 
             let finalMessage = message;
             if (cmdOptions.append) {
@@ -184,10 +199,12 @@ Example:
             }
 
             const options = program.opts();
-            const firstCommit = await state.getFirstCommit();
-            if (!firstCommit) {
+            const currentSession = await session.getSession();
+            if (!currentSession || currentSession.commits.length === 0) {
                 throw new Error('No active session (no snapshots found)');
             }
+            const firstCommit = currentSession.commits[0];
+            if (!firstCommit) throw new Error('Invalid session state');
 
             const baseHash = await git.getParentHash(firstCommit.hash);
             const commits = await git.getCommits(baseHash);
@@ -291,10 +308,12 @@ Example:
   `)
     .action(async () => {
         try {
-            const firstCommit = await state.getFirstCommit();
-            if (!firstCommit) {
+            const currentSession = await session.getSession();
+            if (!currentSession || currentSession.commits.length === 0) {
                 throw new Error('No active session (no snapshots found)');
             }
+            const firstCommit = currentSession.commits[0];
+            if (!firstCommit) throw new Error('Invalid session state');
             const baseHash = await git.getParentHash(firstCommit.hash);
             console.log(baseHash);
         } catch (error: any) {
@@ -309,6 +328,7 @@ program
     .command('git')
     .description('Run a git command with @base placeholder support.')
     .argument('<args...>', 'Git arguments')
+    .option('--base <hash>', 'Manually specify the base commit hash for @base')
     .allowUnknownOption()
     .addHelpText('after', `
 Description:
@@ -319,18 +339,25 @@ Examples:
   $ always-commit git diff --stat @base
   $ always-commit git log --oneline @base..HEAD
   `)
-    .action(async (args: string[]) => {
+    .action(async (args: string[], cmdOptions) => {
         try {
             if (!await isAllowed()) {
                 console.error('Operation disallowed by ALCOM_ALLOW configuration.');
                 process.exit(1);
             }
 
-            const firstCommit = await state.getFirstCommit();
-            let baseHash = 'HEAD'; // Default if no session, though maybe should error?
+            let baseHash = 'HEAD';
 
-            if (firstCommit) {
-                baseHash = await git.getParentHash(firstCommit.hash);
+            if (cmdOptions.base) {
+                baseHash = cmdOptions.base;
+            } else {
+                const currentSession = await session.getSession();
+                if (currentSession && currentSession.commits.length > 0) {
+                    const first = currentSession.commits[0];
+                    if (first) {
+                        baseHash = await git.getParentHash(first.hash);
+                    }
+                }
             }
 
             const processedArgs = args.map(arg => arg.replace('@base', baseHash));
@@ -354,23 +381,31 @@ Examples:
 program
     .command('status')
     .description('Show changed files since the session started (alias for `git diff --name-status @base`).')
+    .option('--base <hash>', 'Manually specify the base commit hash')
     .addHelpText('after', `
 Example:
   $ always-commit status
   M  src/index.ts
   A  docs/new-doc.md
   `)
-    .action(async () => {
-        // Re-use logic or just spawn? Spawning is easier to keep DRY if I extract the runner, but for now just copy-paste or call the action if possible.
-        // Commander actions are functions.
-        // Let's just spawn directly to avoid argument parsing issues.
+    .action(async (cmdOptions) => {
         try {
-            const firstCommit = await state.getFirstCommit();
-            if (!firstCommit) {
-                console.log("No active session.");
-                return;
+            let baseHash: string | undefined;
+
+            if (cmdOptions.base) {
+                baseHash = cmdOptions.base;
+            } else {
+                const currentSession = await session.getSession();
+                if (!currentSession || currentSession.commits.length === 0) {
+                    console.log("No active session.");
+                    return;
+                }
+                const first = currentSession.commits[0];
+                if (!first) return;
+                baseHash = await git.getParentHash(first.hash);
             }
-            const baseHash = await git.getParentHash(firstCommit.hash);
+
+            if (!baseHash) return;
 
             const proc = Bun.spawn(['git', 'diff', '--name-status', baseHash], {
                 stdin: 'inherit',
@@ -388,18 +423,29 @@ Example:
 program
     .command('diff')
     .description('Show changes since the session started (alias for `git diff @base`).')
+    .option('--base <hash>', 'Manually specify the base commit hash')
     .addHelpText('after', `
 Example:
   $ always-commit diff
   `)
-    .action(async () => {
+    .action(async (cmdOptions) => {
         try {
-            const firstCommit = await state.getFirstCommit();
-            if (!firstCommit) {
-                console.log("No active session.");
-                return;
+            let baseHash: string | undefined;
+
+            if (cmdOptions.base) {
+                baseHash = cmdOptions.base;
+            } else {
+                const currentSession = await session.getSession();
+                if (!currentSession || currentSession.commits.length === 0) {
+                    console.log("No active session.");
+                    return;
+                }
+                const first = currentSession.commits[0];
+                if (!first) return;
+                baseHash = await git.getParentHash(first.hash);
             }
-            const baseHash = await git.getParentHash(firstCommit.hash);
+
+            if (!baseHash) return;
 
             const proc = Bun.spawn(['git', 'diff', baseHash], {
                 stdin: 'inherit',

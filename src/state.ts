@@ -64,3 +64,14 @@ export async function getFirstCommit(): Promise<Commit | undefined> {
     const state = await loadState();
     return state.commits[0];
 }
+
+export async function repairSession(commits: { hash: string; message: string; date: string }[]): Promise<void> {
+    const state: State = {
+        commits: commits.map(c => ({
+            hash: c.hash,
+            message: c.message,
+            timestamp: new Date(c.date).getTime()
+        }))
+    };
+    await saveState(state);
+}
