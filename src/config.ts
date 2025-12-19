@@ -13,34 +13,28 @@ export async function isAllowed(): Promise<boolean> {
         const gitRoot = await git.getGitRoot();
 
         // 3. Check .env.local (second priority)
-        const envLocalPath = path.join(gitRoot, '.env.local');
-        if (await fs.pathExists(envLocalPath)) {
-            const content = await fs.readFile(envLocalPath, 'utf-8');
-            const allowed = parseAlcomAllow(content);
-            if (allowed !== undefined) {
-                return allowed;
-            }
-        }
+        if (await checkEnvFile(path.join(gitRoot, '.env.local'))) return true;
 
         // 4. Check .env (lowest priority)
-        const envPath = path.join(gitRoot, '.env');
-        if (await fs.pathExists(envPath)) {
-            const content = await fs.readFile(envPath, 'utf-8');
-            const allowed = parseAlcomAllow(content);
-            if (allowed !== undefined) {
-                return allowed;
-            }
-        }
+        if (await checkEnvFile(path.join(gitRoot, '.env'))) return true;
+
     } catch (error) {
-        // If we can't find git root or read files, we assume allowed by default,
-        // or maybe we should log a warning?
-        // For now, fail safe -> allow, as this is an opt-out feature.
-        // But wait, if git root is not found, we are probably not in a repo,
-        // so git commands will fail anyway.
+        // If we can't find git root or read files, we assume allowed by default.
     }
 
     // Default is allowed
     return true;
+}
+
+async function checkEnvFile(filePath: string): Promise<boolean | undefined> {
+    if (await fs.pathExists(filePath)) {
+        const content = await fs.readFile(filePath, 'utf-8');
+        const allowed = parseAlcomAllow(content);
+        if (allowed !== undefined) {
+            return allowed;
+        }
+    }
+    return undefined;
 }
 
 function parseAlcomAllow(content: string): boolean | undefined {

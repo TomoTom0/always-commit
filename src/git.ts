@@ -56,18 +56,7 @@ export async function getCommits(baseHash: string, headHash: string = 'HEAD'): P
         '--reverse' // Oldest first
     ]);
 
-    if (!rawLog.trim()) return [];
-
-    return rawLog.split('\n').map(line => {
-        const [hash, parentHash, treeHash, date, ...messageParts] = line.split('|');
-        return {
-            hash: hash || '',
-            parentHash: (parentHash || '').split(' ')[0] || '',
-            treeHash: treeHash || '',
-            date: date || '',
-            message: messageParts.join('|')
-        };
-    });
+    return parseGitLog(rawLog);
 }
 
 export async function commitTree(treeHash: string, parentHash: string, message: string): Promise<string> {
@@ -91,6 +80,10 @@ export async function getLog(maxCount: number = 100): Promise<CommitInfo[]> {
         `-n ${maxCount}`
     ]);
 
+    return parseGitLog(rawLog);
+}
+
+function parseGitLog(rawLog: string): CommitInfo[] {
     if (!rawLog.trim()) return [];
 
     return rawLog.split('\n').map(line => {

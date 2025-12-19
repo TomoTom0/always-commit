@@ -54,7 +54,7 @@ Example:
             await state.addCommit(hash, fullMessage);
             console.log(JSON.stringify({ status: 'ok', action: 'save', hash }));
         } catch (error: any) {
-            console.log(JSON.stringify({ status: 'error', message: error.message }));
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });
@@ -100,7 +100,7 @@ Description:
 
             console.log(JSON.stringify({ status: 'ok', action: 'undo', hash: lastCommit.hash }));
         } catch (error: any) {
-            console.log(JSON.stringify({ status: 'error', message: error.message }));
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });
@@ -174,7 +174,7 @@ Example:
             const finalHash = await git.commitAll(finalMessage);
             console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: finalHash }));
         } catch (error: any) {
-            console.log(JSON.stringify({ status: 'error', message: error.message }));
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });
@@ -475,8 +475,14 @@ Example:
     .action(async (cmdOptions) => {
         try {
             const limit = parseInt(cmdOptions.number);
+            if (isNaN(limit) || limit <= 0) {
+                throw new Error('Invalid number argument. Must be a positive integer.');
+            }
             const showAll = cmdOptions.all || false;
             const manualDepth = cmdOptions.manualDepth ? parseInt(cmdOptions.manualDepth) : undefined;
+            if (manualDepth !== undefined && (isNaN(manualDepth) || manualDepth < 0)) {
+                throw new Error('Invalid manual-depth argument. Must be a non-negative integer.');
+            }
 
             const rawCommits = await git.getLog(1000);
 

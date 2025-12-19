@@ -4,7 +4,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { mkdtemp, rm } from "fs/promises";
 
-const alcomPath = "/home/tomo/work/prac/ts/always-commit/src/index.ts";
+const alcomPath = join(import.meta.dir, "../src/index.ts");
 
 async function run() {
     const tmpDir = await mkdtemp(join(tmpdir(), "alcom-test-"));
@@ -49,7 +49,7 @@ async function run() {
         process.exit(1);
     } finally {
         // Cleanup
-        // await rm(tmpDir, { recursive: true, force: true });
+        await rm(tmpDir, { recursive: true, force: true });
     }
 }
 
