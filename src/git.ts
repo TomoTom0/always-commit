@@ -41,11 +41,6 @@ export interface CommitInfo {
 }
 
 export async function getCommits(baseHash: string, headHash: string = 'HEAD'): Promise<CommitInfo[]> {
-    const log = await git.log({ from: baseHash, to: headHash });
-    // simple-git log returns most recent first. We usually want oldest first for processing.
-    // However, let's just return what it gives and handle order in caller or reverse here.
-    // Let's reverse it to be chronological (oldest first).
-
     // We need tree hash too. simple-git log might not give it by default.
     // Let's use raw log for precision.
     const rawLog = await git.raw([

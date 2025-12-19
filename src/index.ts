@@ -12,6 +12,15 @@ program
     .description('A tool to manage temporary git snapshots during LLM-assisted coding sessions.')
     .version('0.0.1')
     .option('-d, --dry-run', 'Simulate the command without making any changes')
+    .hook('preAction', async (thisCommand, actionCommand) => {
+        // Commands that require permission check
+        // If we want to apply to all, we just check.
+        // Assuming global disable for now as per feedback suggestion to centralize.
+        if (!await isAllowed()) {
+            console.error('Operation disallowed by ALCOM_ALLOW configuration.');
+            process.exit(1);
+        }
+    })
     .addHelpText('after', `
 Examples:
   $ always-commit save "WIP: refactoring"
@@ -30,10 +39,7 @@ Example:
   `)
     .action(async (message, cmdOptions) => {
         try {
-            if (!await isAllowed()) {
-                console.error('Operation disallowed by ALCOM_ALLOW configuration.');
-                process.exit(1);
-            }
+
 
             const globalOptions = program.opts();
             const options = { ...globalOptions, ...cmdOptions };
@@ -69,10 +75,7 @@ Description:
   `)
     .action(async () => {
         try {
-            if (!await isAllowed()) {
-                console.error('Operation disallowed by ALCOM_ALLOW configuration.');
-                process.exit(1);
-            }
+
 
             const options = program.opts();
 
@@ -124,10 +127,7 @@ Example:
   `)
     .action(async (message, cmdOptions) => {
         try {
-            if (!await isAllowed()) {
-                console.error('Operation disallowed by ALCOM_ALLOW configuration.');
-                process.exit(1);
-            }
+
 
             const options = program.opts();
             let baseHash: string | undefined;
@@ -193,10 +193,7 @@ Example:
   `)
     .action(async () => {
         try {
-            if (!await isAllowed()) {
-                console.error('Operation disallowed by ALCOM_ALLOW configuration.');
-                process.exit(1);
-            }
+
 
             const options = program.opts();
             const currentSession = await session.getSession();
@@ -341,10 +338,7 @@ Examples:
   `)
     .action(async (args: string[], cmdOptions) => {
         try {
-            if (!await isAllowed()) {
-                console.error('Operation disallowed by ALCOM_ALLOW configuration.');
-                process.exit(1);
-            }
+
 
             let baseHash = 'HEAD';
 

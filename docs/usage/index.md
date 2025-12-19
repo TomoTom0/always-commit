@@ -97,7 +97,7 @@ alcom log [options]
 
 ```bash
 $ alcom log
-2d2facd test prefix
+2d2facd --alcom-- test prefix
 ...
 
 $ alcom log --all

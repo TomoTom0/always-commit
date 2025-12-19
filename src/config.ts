@@ -20,6 +20,7 @@ export async function isAllowed(): Promise<boolean> {
 
     } catch (error) {
         // If we can't find git root or read files, we assume allowed by default.
+        console.warn(`[alcom] Warning: Could not read config. Defaulting to allowed. Error: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Default is allowed
