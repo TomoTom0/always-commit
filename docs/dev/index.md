@@ -5,12 +5,12 @@
 このツールは主に3つのコンポーネントで構成されています：
 
 1.  **CLI (`src/index.ts`)**: `commander` を使用してコマンドを解析し、ロジックを制御するエントリーポイントです。
-2.  **状態管理 (`src/state.ts`)**: 一時的なスナップショットを追跡する `.task-memory.json` ファイルを管理します。
+2.  **状態管理 (`src/state.ts`)**: 一時的なスナップショットを追跡する `.git/always-commit.json` ファイルを管理します。
 3.  **Gitラッパー (`src/git.ts`)**: `simple-git` のラッパーで、Git操作を実行します。
 
 ## 状態管理
 
-状態はプロジェクトルートの `.task-memory.json` に保存されます。
+状態は `.git/always-commit.json` に保存されます。
 
 ```typescript
 interface State {

@@ -1,7 +1,19 @@
 import fs from 'fs-extra';
 import path from 'path';
+import * as git from './git';
 
-export let STATE_FILE = '.task-memory.json';
+export let STATE_FILE = path.join('.git', 'always-commit.json');
+
+export async function getStatePath(): Promise<string> {
+    if (path.isAbsolute(STATE_FILE)) return STATE_FILE;
+    try {
+        const root = await git.getGitRoot();
+        return path.join(root, '.git', 'always-commit.json');
+    } catch {
+        // Fallback for when git root can't be found (e.g. not in a repo)
+        return STATE_FILE;
+    }
+}
 
 export function setStateFile(path: string) {
     STATE_FILE = path;
@@ -22,14 +34,16 @@ const defaultState: State = {
 };
 
 export async function loadState(): Promise<State> {
-    if (await fs.pathExists(STATE_FILE)) {
-        return fs.readJson(STATE_FILE);
+    const statePath = await getStatePath();
+    if (await fs.pathExists(statePath)) {
+        return fs.readJson(statePath);
     }
     return { commits: [] };
 }
 
 export async function saveState(state: State): Promise<void> {
-    await fs.writeJson(STATE_FILE, state, { spaces: 2 });
+    const statePath = await getStatePath();
+    await fs.writeJson(statePath, state, { spaces: 2 });
 }
 
 export async function addCommit(hash: string, message: string): Promise<void> {
@@ -52,7 +66,8 @@ export async function popCommit(): Promise<Commit | undefined> {
 }
 
 export async function clearState(): Promise<void> {
-    await fs.remove(STATE_FILE);
+    const statePath = await getStatePath();
+    await fs.remove(statePath);
 }
 
 export async function getLastCommit(): Promise<Commit | undefined> {
@@ -63,4 +78,15 @@ export async function getLastCommit(): Promise<Commit | undefined> {
 export async function getFirstCommit(): Promise<Commit | undefined> {
     const state = await loadState();
     return state.commits[0];
+}
+
+export async function repairSession(commits: { hash: string; message: string; date: string }[]): Promise<void> {
+    const state: State = {
+        commits: commits.map(c => ({
+            hash: c.hash,
+            message: c.message,
+            timestamp: new Date(c.date).getTime()
+        }))
+    };
+    await saveState(state);
 }
