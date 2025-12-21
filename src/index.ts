@@ -227,11 +227,7 @@ Example:
             let actions: string[] = [];
 
             for (const commit of commits) {
-<<<<<<< HEAD
-                const isSave = commit.message.startsWith('--alcom--');
-=======
                 const isSave = git.isAlcomCommit(commit.message);
->>>>>>> a4b6ca3 (feat: セッション未作成時も`finish`コマンドで通常コミット可能に)
 
                 if (isSave) {
                     pendingSaves.push(commit);
@@ -499,11 +495,7 @@ Example:
                 for (let i = 0; i < rawCommits.length; i++) {
                     const commit = rawCommits[i];
                     if (!commit) continue;
-<<<<<<< HEAD
-                    const isSave = commit.message.startsWith('--alcom--');
-=======
                     const isSave = git.isAlcomCommit(commit.message);
->>>>>>> a4b6ca3 (feat: セッション未作成時も`finish`コマンドで通常コミット可能に)
                     if (!isSave) {
                         manualCount++;
                     }
@@ -520,21 +512,13 @@ Example:
                 }
 
                 if (!showAll) {
-<<<<<<< HEAD
-                    commitsToShow = commitsToShow.filter(c => c.message.startsWith('--alcom--'));
-=======
                     commitsToShow = commitsToShow.filter(c => git.isAlcomCommit(c.message));
->>>>>>> a4b6ca3 (feat: セッション未作成時も`finish`コマンドで通常コミット可能に)
                 }
             } else {
                 if (showAll) {
                     commitsToShow = rawCommits;
                 } else {
-<<<<<<< HEAD
-                    commitsToShow = rawCommits.filter(c => c.message.startsWith('--alcom--'));
-=======
                     commitsToShow = rawCommits.filter(c => git.isAlcomCommit(c.message));
->>>>>>> a4b6ca3 (feat: セッション未作成時も`finish`コマンドで通常コミット可能に)
                 }
                 commitsToShow = commitsToShow.slice(0, limit);
             }

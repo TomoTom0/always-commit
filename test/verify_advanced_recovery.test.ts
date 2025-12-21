@@ -6,7 +6,7 @@ import { mkdtemp, rm, readFile } from "fs/promises";
 import { existsSync } from "fs";
 
 // Path to compiled source handling
-const alcomPath = "/home/tomo/work/prac/ts/always-commit/src/index.ts";
+const alcomPath = join(import.meta.dir, "../src/index.ts");
 
 async function run() {
     const tmpDir = await mkdtemp(join(tmpdir(), "alcom-adv-recovery-"));
