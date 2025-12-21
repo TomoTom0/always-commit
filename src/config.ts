@@ -13,10 +13,12 @@ export async function isAllowed(): Promise<boolean> {
         const gitRoot = await git.getGitRoot();
 
         // 3. Check .env.local (second priority)
-        if (await checkEnvFile(path.join(gitRoot, '.env.local'))) return true;
+        const localAllowed = await checkEnvFile(path.join(gitRoot, '.env.local'));
+        if (localAllowed !== undefined) return localAllowed;
 
         // 4. Check .env (lowest priority)
-        if (await checkEnvFile(path.join(gitRoot, '.env'))) return true;
+        const envAllowed = await checkEnvFile(path.join(gitRoot, '.env'));
+        if (envAllowed !== undefined) return envAllowed;
 
     } catch (error) {
         // If we can't find git root or read files, we assume allowed by default.
