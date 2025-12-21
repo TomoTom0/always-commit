@@ -6,7 +6,7 @@ import { mkdtemp, rm } from "fs/promises";
 import { existsSync } from "fs";
 
 // Use absolute path to the compiled js or just run ts with bun
-const alcomPath = "/home/tomo/work/prac/ts/always-commit/src/index.ts";
+const alcomPath = join(import.meta.dir, "../src/index.ts");
 
 async function run() {
     const tmpDir = await mkdtemp(join(tmpdir(), "alcom-recovery-test-"));
