@@ -3,7 +3,7 @@ import simpleGit, { type SimpleGit } from 'simple-git';
 const git: SimpleGit = simpleGit();
 
 export async function commitAll(message: string, allowEmpty: boolean = false): Promise<string> {
-    await git.add('.');
+    await git.add(['-A']);
     const options = allowEmpty ? { '--allow-empty': null } : {};
     const result = await git.commit(message, undefined, options as any);
     return result.commit;
@@ -128,7 +128,7 @@ export async function findLatestAlcomSession(limit: number = 50): Promise<Commit
     let foundSession = false;
 
     for (const commit of commits) {
-        if (commit.message.startsWith('--alcom--')) {
+        if (isAlcomCommit(commit.message)) {
             foundSession = true;
             sessionCommits.push(commit);
         } else {
@@ -152,4 +152,8 @@ export async function isAncestor(ancestor: string, descendant: string = 'HEAD'):
     });
     const exitCode = await proc.exited;
     return exitCode === 0;
+}
+
+export function isAlcomCommit(message: string): boolean {
+    return message.includes('--alcom--');
 }

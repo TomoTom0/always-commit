@@ -145,8 +145,15 @@ Example:
             }
 
             if (!baseHash) {
-                // Try session again just to be sure or error out
-                throw new Error('No active session found and no --base provided.');
+                // セッションが存在しない場合は、通常のコミットとして動作
+                if (options.dryRun) {
+                    console.log(`[Dry Run] Would commit changes with message: "${message}"`);
+                    return;
+                }
+
+                const finalHash = await git.commitAll(message);
+                console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: finalHash }));
+                return;
             }
 
             let finalMessage = message;
@@ -154,7 +161,7 @@ Example:
                 const commits = await git.getCommits(baseHash);
                 // Filter for alcom commits and extract messages
                 const commitMessages = commits
-                    .filter(c => c.message.startsWith('--alcom--'))
+                    .filter(c => git.isAlcomCommit(c.message))
                     .map(c => `- ${c.message.replace('--alcom-- ', '')}`);
 
                 if (commitMessages.length > 0) {
@@ -220,7 +227,7 @@ Example:
             let actions: string[] = [];
 
             for (const commit of commits) {
-                const isSave = commit.message.startsWith('--alcom--');
+                const isSave = git.isAlcomCommit(commit.message);
 
                 if (isSave) {
                     pendingSaves.push(commit);
@@ -488,7 +495,7 @@ Example:
                 for (let i = 0; i < rawCommits.length; i++) {
                     const commit = rawCommits[i];
                     if (!commit) continue;
-                    const isSave = commit.message.startsWith('--alcom--');
+                    const isSave = git.isAlcomCommit(commit.message);
                     if (!isSave) {
                         manualCount++;
                     }
@@ -505,13 +512,13 @@ Example:
                 }
 
                 if (!showAll) {
-                    commitsToShow = commitsToShow.filter(c => c.message.startsWith('--alcom--'));
+                    commitsToShow = commitsToShow.filter(c => git.isAlcomCommit(c.message));
                 }
             } else {
                 if (showAll) {
                     commitsToShow = rawCommits;
                 } else {
-                    commitsToShow = rawCommits.filter(c => c.message.startsWith('--alcom--'));
+                    commitsToShow = rawCommits.filter(c => git.isAlcomCommit(c.message));
                 }
                 commitsToShow = commitsToShow.slice(0, limit);
             }
