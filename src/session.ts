@@ -35,6 +35,21 @@ export async function getSession(options: { autoRepair: boolean } = { autoRepair
         await state.saveState(currentState);
     }
 
+    // If we still have commits, check that the first commit also exists
+    // (status/diff commands need to access the parent of the first commit)
+    if (commits.length > 0) {
+        const first = commits[0];
+        if (first) {
+            const isValidFirst = await git.isAncestor(first.hash);
+            if (!isValidFirst) {
+                // First commit doesn't exist, invalidate entire session
+                commits = [];
+                currentState.commits = commits;
+                await state.saveState(currentState);
+            }
+        }
+    }
+
     // If we still have commits, we have a valid session (at least partially)
     if (currentState.commits.length > 0) {
         return currentState;
