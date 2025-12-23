@@ -52,11 +52,16 @@ export interface CommitInfo {
 export async function getCommits(baseHash: string, headHash: string = 'HEAD'): Promise<CommitInfo[]> {
     // We need tree hash too. simple-git log might not give it by default.
     // Let's use raw log for precision.
+
+    // If baseHash is the empty tree (used for root commits), get all commits from HEAD
+    const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+    const range = baseHash === EMPTY_TREE ? headHash : `${baseHash}..${headHash}`;
+
     const rawLog = await git.raw([
         'log',
         '--pretty=format:%H|%P|%T|%cd|%s',
         '--date=format:%Y-%m-%d %H:%M:%S',
-        `${baseHash}..${headHash}`,
+        range,
         '--reverse' // Oldest first
     ]);
 
@@ -117,37 +122,52 @@ export async function checkCommitExists(hash: string): Promise<boolean> {
 }
 
 export async function findLatestAlcomSession(limit: number = 50): Promise<CommitInfo[]> {
-    // Get recent commits
-    const commits = await getLog(limit);
-
-    // Filter and group contiguous alcom commits from the most recent one backwards.
-    // However, if we are in a state where we made some manual commits AFTER the session,
-    // we might want to recover the *last active session*.
-    //
+    // Find consecutive alcom commits from HEAD backwards (following parent chain)
     // Strategy:
-    // 1. Iterate from newest to oldest.
-    // 2. Find the first occurrence of an alcom commit (start of a session looking backwards).
-    // 3. Continue collecting alcom commits until we hit a non-alcom commit or end of list.
-    //
-    // Note: This assumes a session is a contiguous block. If a user did manual commits
-    // interspersed with saves, this logic might break (or treat them as separate sessions).
-    // Current alcom design encourages "save -> save -> finish", so contiguous is a fair assumption.
+    // 1. Check if HEAD is an --alcom-- commit. If not, return empty (no session).
+    // 2. If HEAD is --alcom--, follow the parent chain collecting consecutive --alcom-- commits
+    // 3. Stop when we hit a non-alcom commit or reach the limit
 
-    let sessionCommits: CommitInfo[] = [];
-    let foundSession = false;
+    const sessionCommits: CommitInfo[] = [];
 
-    for (const commit of commits) {
-        if (isAlcomCommit(commit.message)) {
-            foundSession = true;
-            sessionCommits.push(commit);
-        } else {
-            if (foundSession) {
-                // We found a session and now hit a non-alcom commit.
-                // This marks the boundary (the "base" is this commit).
+    try {
+        let currentHash = await getCurrentHead();
+
+        // Follow parent chain, collecting consecutive --alcom-- commits
+        for (let i = 0; i < limit; i++) {
+            // Get commit info
+            const rawLog = await git.raw([
+                'log',
+                '--pretty=format:%H|%P|%T|%cd|%s',
+                '--date=format:%Y-%m-%d %H:%M:%S',
+                '-n', '1',
+                currentHash
+            ]);
+
+            if (!rawLog.trim()) break;
+
+            const parsed = parseGitLog(rawLog);
+            const commit = parsed[0];
+            if (!commit) break;
+
+            // Check if this is an alcom commit
+            if (!isAlcomCommit(commit.message)) {
+                // Hit a non-alcom commit, stop here
                 break;
             }
-            // If we haven't found a session yet, keep looking.
+
+            sessionCommits.push(commit);
+
+            // Move to parent
+            try {
+                currentHash = await getParentHash(currentHash);
+            } catch {
+                // No more parents (reached root commit)
+                break;
+            }
         }
+    } catch {
+        return [];
     }
 
     // Return chronological order (oldest first) as expected by state

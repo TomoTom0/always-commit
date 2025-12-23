@@ -221,7 +221,11 @@ Example:
             if (!firstCommit) throw new Error('Invalid session state');
 
             const isRoot = await git.isRootCommit(firstCommit.hash);
-            const baseHash = isRoot ? '4b825dc642cb6eb9a060e54bf8d69288fbee4904' : await git.getParentHash(firstCommit.hash);
+            if (isRoot) {
+                throw new Error('Cannot auto-squash: session starts from root commit');
+            }
+
+            const baseHash = await git.getParentHash(firstCommit.hash);
             const commits = await git.getCommits(baseHash);
 
             if (commits.length === 0) {
@@ -335,6 +339,36 @@ Example:
             console.log(baseHash);
         } catch (error: any) {
             console.error(error.message);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('base-update')
+    .description('Update session state by finding consecutive --alcom-- commits from HEAD.')
+    .addHelpText('after', `
+Description:
+  Scans the git history from HEAD's parent backwards, collecting consecutive
+  --alcom-- commits and updates the session state file accordingly.
+  This is useful when the session state becomes corrupted or outdated.
+
+Example:
+  $ always-commit base-update
+  `)
+    .action(async () => {
+        try {
+            const alcomCommits = await git.findLatestAlcomSession();
+
+            if (alcomCommits.length === 0) {
+                await state.clearState();
+                console.log(JSON.stringify({ status: 'ok', action: 'base-update', sessionCommits: 0, message: 'No consecutive --alcom-- commits found from HEAD. Session cleared.' }));
+                return;
+            }
+
+            await state.repairSession(alcomCommits);
+            console.log(JSON.stringify({ status: 'ok', action: 'base-update', sessionCommits: alcomCommits.length, firstCommit: alcomCommits[0]?.hash.substring(0, 7), lastCommit: alcomCommits[alcomCommits.length - 1]?.hash.substring(0, 7) }));
+        } catch (error: any) {
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });
@@ -493,15 +527,17 @@ Example:
 
 program
     .command('log')
-    .description('List recent commits with filtering options.')
+    .description('List commits in the current session.')
     .option('-n, --number <count>', 'Number of commits to show', '10')
     .option('-a, --all', 'Show all commits (default: only alcom save commits)')
-    .option('--manual-depth <count>', 'Include commits up to the N-th manual commit')
     .addHelpText('after', `
+Description:
+  Shows commits from the current active session only.
+  If there is no active session, nothing is displayed.
+
 Example:
   $ always-commit log
   $ always-commit log --all
-  $ always-commit log --manual-depth 2
   `)
     .action(async (cmdOptions) => {
         try {
@@ -510,48 +546,23 @@ Example:
                 throw new Error('Invalid number argument. Must be a positive integer.');
             }
             const showAll = cmdOptions.all || false;
-            const manualDepth = cmdOptions.manualDepth ? parseInt(cmdOptions.manualDepth) : undefined;
-            if (manualDepth !== undefined && (isNaN(manualDepth) || manualDepth < 0)) {
-                throw new Error('Invalid manual-depth argument. Must be a non-negative integer.');
+
+            // Get current session
+            const currentSession = await session.getSession();
+            if (!currentSession || currentSession.commits.length === 0) {
+                // No active session, nothing to show
+                return;
             }
 
-            const rawCommits = await git.getLog(1000);
+            // Show commits from the current session only
+            const sessionCommits = currentSession.commits.map(c => ({
+                hash: c.hash,
+                message: c.message,
+                date: new Date(c.timestamp).toISOString().replace('T', ' ').substring(0, 19)
+            }));
 
-            let commitsToShow: git.CommitInfo[] = [];
-
-            if (manualDepth !== undefined) {
-                let manualCount = 0;
-                let cutoffIndex = -1;
-                for (let i = 0; i < rawCommits.length; i++) {
-                    const commit = rawCommits[i];
-                    if (!commit) continue;
-                    const isSave = git.isAlcomCommit(commit.message);
-                    if (!isSave) {
-                        manualCount++;
-                    }
-                    if (manualCount >= manualDepth) {
-                        cutoffIndex = i;
-                        break;
-                    }
-                }
-
-                if (cutoffIndex !== -1) {
-                    commitsToShow = rawCommits.slice(0, cutoffIndex + 1);
-                } else {
-                    commitsToShow = rawCommits;
-                }
-
-                if (!showAll) {
-                    commitsToShow = commitsToShow.filter(c => git.isAlcomCommit(c.message));
-                }
-            } else {
-                if (showAll) {
-                    commitsToShow = rawCommits;
-                } else {
-                    commitsToShow = rawCommits.filter(c => git.isAlcomCommit(c.message));
-                }
-                commitsToShow = commitsToShow.slice(0, limit);
-            }
+            // Apply limit
+            const commitsToShow = sessionCommits.slice(0, Math.min(limit, sessionCommits.length));
 
             for (const commit of commitsToShow) {
                 const hash = commit.hash.substring(0, 7);
