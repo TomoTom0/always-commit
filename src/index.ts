@@ -140,18 +140,7 @@ Example:
             if (cmdOptions.base) {
                 baseHash = cmdOptions.base;
             } else {
-                const currentSession = await session.getSession();
-                if (currentSession && currentSession.commits.length > 0) {
-                    const firstCommit = currentSession.commits[0];
-                    if (firstCommit) {
-                        const isRoot = await git.isRootCommit(firstCommit.hash);
-                        if (isRoot) {
-                            baseHash = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-                        } else {
-                            baseHash = await git.getParentHash(firstCommit.hash);
-                        }
-                    }
-                }
+                baseHash = await git.findBaseCommit();
             }
 
             if (!baseHash) {
@@ -399,18 +388,7 @@ Examples:
             if (cmdOptions.base) {
                 baseHash = cmdOptions.base;
             } else {
-                const currentSession = await session.getSession();
-                if (currentSession && currentSession.commits.length > 0) {
-                    const first = currentSession.commits[0];
-                    if (first) {
-                        const isRoot = await git.isRootCommit(first.hash);
-                        if (isRoot) {
-                            baseHash = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-                        } else {
-                            baseHash = await git.getParentHash(first.hash);
-                        }
-                    }
-                }
+                baseHash = await git.findBaseCommit();
             }
 
             const processedArgs = args.map(arg => arg.replace('@base', baseHash));
@@ -433,7 +411,7 @@ Examples:
 
 program
     .command('status')
-    .description('Show changed files since the session started (alias for `git diff --name-status @base`).')
+    .description('Show changed files since the base commit (first non-alcom commit).')
     .option('--base <hash>', 'Manually specify the base commit hash')
     .addHelpText('after', `
 Example:
@@ -443,28 +421,7 @@ Example:
   `)
     .action(async (cmdOptions) => {
         try {
-            let baseHash: string | undefined;
-
-            if (cmdOptions.base) {
-                baseHash = cmdOptions.base;
-            } else {
-                const currentSession = await session.getSession();
-                if (!currentSession || currentSession.commits.length === 0) {
-                    console.log("No active session.");
-                    return;
-                }
-                const first = currentSession.commits[0];
-                if (!first) return;
-
-                const isRoot = await git.isRootCommit(first.hash);
-                if (isRoot) {
-                    baseHash = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-                } else {
-                    baseHash = await git.getParentHash(first.hash);
-                }
-            }
-
-            if (!baseHash) return;
+            const baseHash = cmdOptions.base || await git.findBaseCommit();
 
             const proc = Bun.spawn(['git', 'diff', '--name-status', baseHash], {
                 stdin: 'inherit',
@@ -481,7 +438,7 @@ Example:
 
 program
     .command('diff')
-    .description('Show changes since the session started (alias for `git diff @base`).')
+    .description('Show changes since the base commit (first non-alcom commit).')
     .option('--base <hash>', 'Manually specify the base commit hash')
     .addHelpText('after', `
 Example:
@@ -489,28 +446,7 @@ Example:
   `)
     .action(async (cmdOptions) => {
         try {
-            let baseHash: string | undefined;
-
-            if (cmdOptions.base) {
-                baseHash = cmdOptions.base;
-            } else {
-                const currentSession = await session.getSession();
-                if (!currentSession || currentSession.commits.length === 0) {
-                    console.log("No active session.");
-                    return;
-                }
-                const first = currentSession.commits[0];
-                if (!first) return;
-
-                const isRoot = await git.isRootCommit(first.hash);
-                if (isRoot) {
-                    baseHash = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-                } else {
-                    baseHash = await git.getParentHash(first.hash);
-                }
-            }
-
-            if (!baseHash) return;
+            const baseHash = cmdOptions.base || await git.findBaseCommit();
 
             const proc = Bun.spawn(['git', 'diff', baseHash], {
                 stdin: 'inherit',

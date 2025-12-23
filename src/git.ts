@@ -186,3 +186,43 @@ export async function isAncestor(ancestor: string, descendant: string = 'HEAD'):
 export function isAlcomCommit(message: string): boolean {
     return message.includes('--alcom--');
 }
+
+export async function findBaseCommit(limit: number = 100): Promise<string> {
+    // Find the first non-alcom commit from HEAD backwards
+    // If all commits are alcom commits, return empty tree hash
+    const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+    
+    try {
+        let currentHash = await getCurrentHead();
+        
+        for (let i = 0; i < limit; i++) {
+            const rawLog = await git.raw([
+                'log',
+                '--pretty=format:%H|%P|%T|%cd|%s',
+                '--date=format:%Y-%m-%d %H:%M:%S',
+                '-n', '1',
+                currentHash
+            ]);
+            
+            if (!rawLog.trim()) return EMPTY_TREE;
+            
+            const parsed = parseGitLog(rawLog);
+            const commit = parsed[0];
+            if (!commit) return EMPTY_TREE;
+            
+            if (!isAlcomCommit(commit.message)) {
+                return commit.hash;
+            }
+            
+            try {
+                currentHash = await getParentHash(currentHash);
+            } catch {
+                return EMPTY_TREE;
+            }
+        }
+        
+        return EMPTY_TREE;
+    } catch {
+        return EMPTY_TREE;
+    }
+}
