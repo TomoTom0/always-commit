@@ -90,6 +90,11 @@ Description:
                 throw new Error('HEAD does not match the last snapshot. Manual changes detected?');
             }
 
+            const isRoot = await git.isRootCommit(lastCommit.hash);
+            if (isRoot) {
+                throw new Error('Cannot undo: last commit is a root commit');
+            }
+
             const parentHash = await git.getParentHash(lastCommit.hash);
 
             if (options.dryRun) {
@@ -135,13 +140,7 @@ Example:
             if (cmdOptions.base) {
                 baseHash = cmdOptions.base;
             } else {
-                const currentSession = await session.getSession();
-                if (currentSession && currentSession.commits.length > 0) {
-                    const firstCommit = currentSession.commits[0];
-                    if (firstCommit) {
-                        baseHash = await git.getParentHash(firstCommit.hash);
-                    }
-                }
+                baseHash = await git.findBaseCommit();
             }
 
             if (!baseHash) {
@@ -209,6 +208,11 @@ Example:
             }
             const firstCommit = currentSession.commits[0];
             if (!firstCommit) throw new Error('Invalid session state');
+
+            const isRoot = await git.isRootCommit(firstCommit.hash);
+            if (isRoot) {
+                throw new Error('Cannot auto-squash: session starts from root commit');
+            }
 
             const baseHash = await git.getParentHash(firstCommit.hash);
             const commits = await git.getCommits(baseHash);
@@ -318,10 +322,42 @@ Example:
             }
             const firstCommit = currentSession.commits[0];
             if (!firstCommit) throw new Error('Invalid session state');
-            const baseHash = await git.getParentHash(firstCommit.hash);
+
+            const isRoot = await git.isRootCommit(firstCommit.hash);
+            const baseHash = isRoot ? git.EMPTY_TREE : await git.getParentHash(firstCommit.hash);
             console.log(baseHash);
         } catch (error: any) {
             console.error(error.message);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('base-update')
+    .description('Update session state by finding consecutive --alcom-- commits from HEAD.')
+    .addHelpText('after', `
+Description:
+  Scans the git history from HEAD's parent backwards, collecting consecutive
+  --alcom-- commits and updates the session state file accordingly.
+  This is useful when the session state becomes corrupted or outdated.
+
+Example:
+  $ always-commit base-update
+  `)
+    .action(async () => {
+        try {
+            const alcomCommits = await git.findLatestAlcomSession();
+
+            if (alcomCommits.length === 0) {
+                await state.clearState();
+                console.log(JSON.stringify({ status: 'ok', action: 'base-update', sessionCommits: 0, message: 'No consecutive --alcom-- commits found from HEAD. Session cleared.' }));
+                return;
+            }
+
+            await state.repairSession(alcomCommits);
+            console.log(JSON.stringify({ status: 'ok', action: 'base-update', sessionCommits: alcomCommits.length, firstCommit: alcomCommits[0]?.hash.substring(0, 7), lastCommit: alcomCommits[alcomCommits.length - 1]?.hash.substring(0, 7) }));
+        } catch (error: any) {
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });
@@ -352,13 +388,7 @@ Examples:
             if (cmdOptions.base) {
                 baseHash = cmdOptions.base;
             } else {
-                const currentSession = await session.getSession();
-                if (currentSession && currentSession.commits.length > 0) {
-                    const first = currentSession.commits[0];
-                    if (first) {
-                        baseHash = await git.getParentHash(first.hash);
-                    }
-                }
+                baseHash = await git.findBaseCommit();
             }
 
             const processedArgs = args.map(arg => arg.replace('@base', baseHash));
@@ -381,34 +411,23 @@ Examples:
 
 program
     .command('status')
-    .description('Show changed files since the session started (alias for `git diff --name-status @base`).')
+    .description('Show changed files since the base commit (first non-alcom commit).')
+    .argument('[args...]', 'Additional git diff arguments')
     .option('--base <hash>', 'Manually specify the base commit hash')
+    .allowUnknownOption()
     .addHelpText('after', `
 Example:
   $ always-commit status
   M  src/index.ts
   A  docs/new-doc.md
+  $ always-commit status --stat
+  $ always-commit status -- src/
   `)
-    .action(async (cmdOptions) => {
+    .action(async (args: string[], cmdOptions) => {
         try {
-            let baseHash: string | undefined;
+            const baseHash = cmdOptions.base || await git.findBaseCommit();
 
-            if (cmdOptions.base) {
-                baseHash = cmdOptions.base;
-            } else {
-                const currentSession = await session.getSession();
-                if (!currentSession || currentSession.commits.length === 0) {
-                    console.log("No active session.");
-                    return;
-                }
-                const first = currentSession.commits[0];
-                if (!first) return;
-                baseHash = await git.getParentHash(first.hash);
-            }
-
-            if (!baseHash) return;
-
-            const proc = Bun.spawn(['git', 'diff', '--name-status', baseHash], {
+            const proc = Bun.spawn(['git', '--no-pager', 'diff', '--name-status', baseHash, ...args], {
                 stdin: 'inherit',
                 stdout: 'inherit',
                 stderr: 'inherit',
@@ -423,32 +442,22 @@ Example:
 
 program
     .command('diff')
-    .description('Show changes since the session started (alias for `git diff @base`).')
+    .description('Show changes since the base commit (first non-alcom commit).')
+    .argument('[args...]', 'Additional git diff arguments')
     .option('--base <hash>', 'Manually specify the base commit hash')
+    .allowUnknownOption()
     .addHelpText('after', `
 Example:
   $ always-commit diff
+  $ always-commit diff --stat
+  $ always-commit diff --name-only
+  $ always-commit diff -- src/
   `)
-    .action(async (cmdOptions) => {
+    .action(async (args: string[], cmdOptions) => {
         try {
-            let baseHash: string | undefined;
+            const baseHash = cmdOptions.base || await git.findBaseCommit();
 
-            if (cmdOptions.base) {
-                baseHash = cmdOptions.base;
-            } else {
-                const currentSession = await session.getSession();
-                if (!currentSession || currentSession.commits.length === 0) {
-                    console.log("No active session.");
-                    return;
-                }
-                const first = currentSession.commits[0];
-                if (!first) return;
-                baseHash = await git.getParentHash(first.hash);
-            }
-
-            if (!baseHash) return;
-
-            const proc = Bun.spawn(['git', 'diff', baseHash], {
+            const proc = Bun.spawn(['git', '--no-pager', 'diff', baseHash, ...args], {
                 stdin: 'inherit',
                 stdout: 'inherit',
                 stderr: 'inherit',
@@ -463,15 +472,17 @@ Example:
 
 program
     .command('log')
-    .description('List recent commits with filtering options.')
+    .description('List commits in the current session.')
     .option('-n, --number <count>', 'Number of commits to show', '10')
     .option('-a, --all', 'Show all commits (default: only alcom save commits)')
-    .option('--manual-depth <count>', 'Include commits up to the N-th manual commit')
     .addHelpText('after', `
+Description:
+  Shows commits from the current active session only.
+  If there is no active session, nothing is displayed.
+
 Example:
   $ always-commit log
   $ always-commit log --all
-  $ always-commit log --manual-depth 2
   `)
     .action(async (cmdOptions) => {
         try {
@@ -479,49 +490,23 @@ Example:
             if (isNaN(limit) || limit <= 0) {
                 throw new Error('Invalid number argument. Must be a positive integer.');
             }
-            const showAll = cmdOptions.all || false;
-            const manualDepth = cmdOptions.manualDepth ? parseInt(cmdOptions.manualDepth) : undefined;
-            if (manualDepth !== undefined && (isNaN(manualDepth) || manualDepth < 0)) {
-                throw new Error('Invalid manual-depth argument. Must be a non-negative integer.');
+
+            // Get current session
+            const currentSession = await session.getSession();
+            if (!currentSession || currentSession.commits.length === 0) {
+                // No active session, nothing to show
+                return;
             }
 
-            const rawCommits = await git.getLog(1000);
+            // Show commits from the current session only
+            const sessionCommits = currentSession.commits.map(c => ({
+                hash: c.hash,
+                message: c.message,
+                date: new Date(c.timestamp).toISOString().replace('T', ' ').substring(0, 19)
+            }));
 
-            let commitsToShow: git.CommitInfo[] = [];
-
-            if (manualDepth !== undefined) {
-                let manualCount = 0;
-                let cutoffIndex = -1;
-                for (let i = 0; i < rawCommits.length; i++) {
-                    const commit = rawCommits[i];
-                    if (!commit) continue;
-                    const isSave = git.isAlcomCommit(commit.message);
-                    if (!isSave) {
-                        manualCount++;
-                    }
-                    if (manualCount >= manualDepth) {
-                        cutoffIndex = i;
-                        break;
-                    }
-                }
-
-                if (cutoffIndex !== -1) {
-                    commitsToShow = rawCommits.slice(0, cutoffIndex + 1);
-                } else {
-                    commitsToShow = rawCommits;
-                }
-
-                if (!showAll) {
-                    commitsToShow = commitsToShow.filter(c => git.isAlcomCommit(c.message));
-                }
-            } else {
-                if (showAll) {
-                    commitsToShow = rawCommits;
-                } else {
-                    commitsToShow = rawCommits.filter(c => git.isAlcomCommit(c.message));
-                }
-                commitsToShow = commitsToShow.slice(0, limit);
-            }
+            // Apply limit
+            const commitsToShow = sessionCommits.slice(0, Math.min(limit, sessionCommits.length));
 
             for (const commit of commitsToShow) {
                 const hash = commit.hash.substring(0, 7);

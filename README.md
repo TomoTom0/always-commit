@@ -35,10 +35,20 @@ alcom finish "feat: 新機能の実装完了"
 
 ### 履歴の確認
 
+現在のアクティブセッションに含まれるコミットを表示します。
+
 ```bash
 $ alcom log
-2d2facd --alcom-- test prefix
+2d2facd 2025-12-23 10:30:00 --alcom-- test prefix
 ...
+```
+
+### セッション状態の再構築
+
+通常は自動的に実行されますが、手動でセッション状態を再構築できます。
+
+```bash
+alcom base-update
 ```
 
 ### Gitコマンドの実行（パススルー）

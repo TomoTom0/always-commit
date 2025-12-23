@@ -2,6 +2,8 @@ import simpleGit, { type SimpleGit } from 'simple-git';
 
 const git: SimpleGit = simpleGit();
 
+export const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
 export async function commitAll(message: string, allowEmpty: boolean = false): Promise<string> {
     await git.add(['-A']);
     const options = allowEmpty ? { '--allow-empty': null } : {};
@@ -32,6 +34,15 @@ export async function getParentHash(hash: string): Promise<string> {
     return result.trim();
 }
 
+export async function isRootCommit(hash: string): Promise<boolean> {
+    try {
+        await git.revparse([`${hash}^`]);
+        return false; // Has a parent, not a root commit
+    } catch {
+        return true; // No parent, is a root commit
+    }
+}
+
 export interface CommitInfo {
     hash: string;
     parentHash: string;
@@ -43,11 +54,15 @@ export interface CommitInfo {
 export async function getCommits(baseHash: string, headHash: string = 'HEAD'): Promise<CommitInfo[]> {
     // We need tree hash too. simple-git log might not give it by default.
     // Let's use raw log for precision.
+
+    // If baseHash is the empty tree (used for root commits), get all commits from HEAD
+    const range = baseHash === EMPTY_TREE ? headHash : `${baseHash}..${headHash}`;
+
     const rawLog = await git.raw([
         'log',
         '--pretty=format:%H|%P|%T|%cd|%s',
         '--date=format:%Y-%m-%d %H:%M:%S',
-        `${baseHash}..${headHash}`,
+        range,
         '--reverse' // Oldest first
     ]);
 
@@ -107,42 +122,71 @@ export async function checkCommitExists(hash: string): Promise<boolean> {
     }
 }
 
-export async function findLatestAlcomSession(limit: number = 50): Promise<CommitInfo[]> {
-    // Get recent commits
-    const commits = await getLog(limit);
+export function isAlcomCommit(message: string): boolean {
+    return message.includes('--alcom--');
+}
 
-    // Filter and group contiguous alcom commits from the most recent one backwards.
-    // However, if we are in a state where we made some manual commits AFTER the session,
-    // we might want to recover the *last active session*.
-    //
-    // Strategy:
-    // 1. Iterate from newest to oldest.
-    // 2. Find the first occurrence of an alcom commit (start of a session looking backwards).
-    // 3. Continue collecting alcom commits until we hit a non-alcom commit or end of list.
-    //
-    // Note: This assumes a session is a contiguous block. If a user did manual commits
-    // interspersed with saves, this logic might break (or treat them as separate sessions).
-    // Current alcom design encourages "save -> save -> finish", so contiguous is a fair assumption.
-
-    let sessionCommits: CommitInfo[] = [];
-    let foundSession = false;
-
-    for (const commit of commits) {
-        if (isAlcomCommit(commit.message)) {
-            foundSession = true;
-            sessionCommits.push(commit);
-        } else {
-            if (foundSession) {
-                // We found a session and now hit a non-alcom commit.
-                // This marks the boundary (the "base" is this commit).
-                break;
-            }
-            // If we haven't found a session yet, keep looking.
+async function* walkCommitHistory(startHash: string, limit: number = 100): AsyncGenerator<CommitInfo> {
+    let currentHash = startHash;
+    
+    for (let i = 0; i < limit; i++) {
+        const rawLog = await git.raw([
+            'log',
+            '--pretty=format:%H|%P|%T|%cd|%s',
+            '--date=format:%Y-%m-%d %H:%M:%S',
+            '-n', '1',
+            currentHash
+        ]);
+        
+        if (!rawLog.trim()) break;
+        
+        const parsed = parseGitLog(rawLog);
+        const commit = parsed[0];
+        if (!commit) break;
+        
+        yield commit;
+        
+        try {
+            currentHash = await getParentHash(currentHash);
+        } catch {
+            break;
         }
     }
+}
 
-    // Return chronological order (oldest first) as expected by state
+export async function findLatestAlcomSession(limit: number = 50): Promise<CommitInfo[]> {
+    const sessionCommits: CommitInfo[] = [];
+    
+    try {
+        const startHash = await getCurrentHead();
+        
+        for await (const commit of walkCommitHistory(startHash, limit)) {
+            if (!isAlcomCommit(commit.message)) {
+                break;
+            }
+            sessionCommits.push(commit);
+        }
+    } catch {
+        return [];
+    }
+    
     return sessionCommits.reverse();
+}
+
+export async function findBaseCommit(limit: number = 100): Promise<string> {
+    try {
+        const startHash = await getCurrentHead();
+        
+        for await (const commit of walkCommitHistory(startHash, limit)) {
+            if (!isAlcomCommit(commit.message)) {
+                return commit.hash;
+            }
+        }
+        
+        return EMPTY_TREE;
+    } catch {
+        return EMPTY_TREE;
+    }
 }
 
 export async function isAncestor(ancestor: string, descendant: string = 'HEAD'): Promise<boolean> {
@@ -152,8 +196,4 @@ export async function isAncestor(ancestor: string, descendant: string = 'HEAD'):
     });
     const exitCode = await proc.exited;
     return exitCode === 0;
-}
-
-export function isAlcomCommit(message: string): boolean {
-    return message.includes('--alcom--');
 }
