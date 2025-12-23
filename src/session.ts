@@ -1,7 +1,7 @@
 import * as state from './state';
 import * as git from './git';
 
-export async function getSession(options: { autoRepair: boolean } = { autoRepair: true }): Promise<state.State | null> {
+export async function getSession(): Promise<state.State | null> {
     // Always rebuild session from HEAD to ensure consistency
     // Strategy:
     // 1. Check if HEAD is an --alcom-- commit

@@ -324,7 +324,7 @@ Example:
             if (!firstCommit) throw new Error('Invalid session state');
 
             const isRoot = await git.isRootCommit(firstCommit.hash);
-            const baseHash = isRoot ? '4b825dc642cb6eb9a060e54bf8d69288fbee4904' : await git.getParentHash(firstCommit.hash);
+            const baseHash = isRoot ? git.EMPTY_TREE : await git.getParentHash(firstCommit.hash);
             console.log(baseHash);
         } catch (error: any) {
             console.error(error.message);
@@ -490,7 +490,6 @@ Example:
             if (isNaN(limit) || limit <= 0) {
                 throw new Error('Invalid number argument. Must be a positive integer.');
             }
-            const showAll = cmdOptions.all || false;
 
             // Get current session
             const currentSession = await session.getSession();

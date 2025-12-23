@@ -2,6 +2,8 @@ import simpleGit, { type SimpleGit } from 'simple-git';
 
 const git: SimpleGit = simpleGit();
 
+export const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
 export async function commitAll(message: string, allowEmpty: boolean = false): Promise<string> {
     await git.add(['-A']);
     const options = allowEmpty ? { '--allow-empty': null } : {};
@@ -54,7 +56,6 @@ export async function getCommits(baseHash: string, headHash: string = 'HEAD'): P
     // Let's use raw log for precision.
 
     // If baseHash is the empty tree (used for root commits), get all commits from HEAD
-    const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
     const range = baseHash === EMPTY_TREE ? headHash : `${baseHash}..${headHash}`;
 
     const rawLog = await git.raw([
@@ -121,57 +122,71 @@ export async function checkCommitExists(hash: string): Promise<boolean> {
     }
 }
 
+export function isAlcomCommit(message: string): boolean {
+    return message.includes('--alcom--');
+}
+
+async function* walkCommitHistory(startHash: string, limit: number = 100): AsyncGenerator<CommitInfo> {
+    let currentHash = startHash;
+    
+    for (let i = 0; i < limit; i++) {
+        const rawLog = await git.raw([
+            'log',
+            '--pretty=format:%H|%P|%T|%cd|%s',
+            '--date=format:%Y-%m-%d %H:%M:%S',
+            '-n', '1',
+            currentHash
+        ]);
+        
+        if (!rawLog.trim()) break;
+        
+        const parsed = parseGitLog(rawLog);
+        const commit = parsed[0];
+        if (!commit) break;
+        
+        yield commit;
+        
+        try {
+            currentHash = await getParentHash(currentHash);
+        } catch {
+            break;
+        }
+    }
+}
+
 export async function findLatestAlcomSession(limit: number = 50): Promise<CommitInfo[]> {
-    // Find consecutive alcom commits from HEAD backwards (following parent chain)
-    // Strategy:
-    // 1. Check if HEAD is an --alcom-- commit. If not, return empty (no session).
-    // 2. If HEAD is --alcom--, follow the parent chain collecting consecutive --alcom-- commits
-    // 3. Stop when we hit a non-alcom commit or reach the limit
-
     const sessionCommits: CommitInfo[] = [];
-
+    
     try {
-        let currentHash = await getCurrentHead();
-
-        // Follow parent chain, collecting consecutive --alcom-- commits
-        for (let i = 0; i < limit; i++) {
-            // Get commit info
-            const rawLog = await git.raw([
-                'log',
-                '--pretty=format:%H|%P|%T|%cd|%s',
-                '--date=format:%Y-%m-%d %H:%M:%S',
-                '-n', '1',
-                currentHash
-            ]);
-
-            if (!rawLog.trim()) break;
-
-            const parsed = parseGitLog(rawLog);
-            const commit = parsed[0];
-            if (!commit) break;
-
-            // Check if this is an alcom commit
+        const startHash = await getCurrentHead();
+        
+        for await (const commit of walkCommitHistory(startHash, limit)) {
             if (!isAlcomCommit(commit.message)) {
-                // Hit a non-alcom commit, stop here
                 break;
             }
-
             sessionCommits.push(commit);
-
-            // Move to parent
-            try {
-                currentHash = await getParentHash(currentHash);
-            } catch {
-                // No more parents (reached root commit)
-                break;
-            }
         }
     } catch {
         return [];
     }
-
-    // Return chronological order (oldest first) as expected by state
+    
     return sessionCommits.reverse();
+}
+
+export async function findBaseCommit(limit: number = 100): Promise<string> {
+    try {
+        const startHash = await getCurrentHead();
+        
+        for await (const commit of walkCommitHistory(startHash, limit)) {
+            if (!isAlcomCommit(commit.message)) {
+                return commit.hash;
+            }
+        }
+        
+        return EMPTY_TREE;
+    } catch {
+        return EMPTY_TREE;
+    }
 }
 
 export async function isAncestor(ancestor: string, descendant: string = 'HEAD'): Promise<boolean> {
@@ -181,48 +196,4 @@ export async function isAncestor(ancestor: string, descendant: string = 'HEAD'):
     });
     const exitCode = await proc.exited;
     return exitCode === 0;
-}
-
-export function isAlcomCommit(message: string): boolean {
-    return message.includes('--alcom--');
-}
-
-export async function findBaseCommit(limit: number = 100): Promise<string> {
-    // Find the first non-alcom commit from HEAD backwards
-    // If all commits are alcom commits, return empty tree hash
-    const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-    
-    try {
-        let currentHash = await getCurrentHead();
-        
-        for (let i = 0; i < limit; i++) {
-            const rawLog = await git.raw([
-                'log',
-                '--pretty=format:%H|%P|%T|%cd|%s',
-                '--date=format:%Y-%m-%d %H:%M:%S',
-                '-n', '1',
-                currentHash
-            ]);
-            
-            if (!rawLog.trim()) return EMPTY_TREE;
-            
-            const parsed = parseGitLog(rawLog);
-            const commit = parsed[0];
-            if (!commit) return EMPTY_TREE;
-            
-            if (!isAlcomCommit(commit.message)) {
-                return commit.hash;
-            }
-            
-            try {
-                currentHash = await getParentHash(currentHash);
-            } catch {
-                return EMPTY_TREE;
-            }
-        }
-        
-        return EMPTY_TREE;
-    } catch {
-        return EMPTY_TREE;
-    }
 }
