@@ -90,6 +90,11 @@ Description:
                 throw new Error('HEAD does not match the last snapshot. Manual changes detected?');
             }
 
+            const isRoot = await git.isRootCommit(lastCommit.hash);
+            if (isRoot) {
+                throw new Error('Cannot undo: last commit is a root commit');
+            }
+
             const parentHash = await git.getParentHash(lastCommit.hash);
 
             if (options.dryRun) {
@@ -139,7 +144,12 @@ Example:
                 if (currentSession && currentSession.commits.length > 0) {
                     const firstCommit = currentSession.commits[0];
                     if (firstCommit) {
-                        baseHash = await git.getParentHash(firstCommit.hash);
+                        const isRoot = await git.isRootCommit(firstCommit.hash);
+                        if (isRoot) {
+                            baseHash = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+                        } else {
+                            baseHash = await git.getParentHash(firstCommit.hash);
+                        }
                     }
                 }
             }
@@ -210,7 +220,8 @@ Example:
             const firstCommit = currentSession.commits[0];
             if (!firstCommit) throw new Error('Invalid session state');
 
-            const baseHash = await git.getParentHash(firstCommit.hash);
+            const isRoot = await git.isRootCommit(firstCommit.hash);
+            const baseHash = isRoot ? '4b825dc642cb6eb9a060e54bf8d69288fbee4904' : await git.getParentHash(firstCommit.hash);
             const commits = await git.getCommits(baseHash);
 
             if (commits.length === 0) {
@@ -318,7 +329,9 @@ Example:
             }
             const firstCommit = currentSession.commits[0];
             if (!firstCommit) throw new Error('Invalid session state');
-            const baseHash = await git.getParentHash(firstCommit.hash);
+
+            const isRoot = await git.isRootCommit(firstCommit.hash);
+            const baseHash = isRoot ? '4b825dc642cb6eb9a060e54bf8d69288fbee4904' : await git.getParentHash(firstCommit.hash);
             console.log(baseHash);
         } catch (error: any) {
             console.error(error.message);
@@ -356,7 +369,12 @@ Examples:
                 if (currentSession && currentSession.commits.length > 0) {
                     const first = currentSession.commits[0];
                     if (first) {
-                        baseHash = await git.getParentHash(first.hash);
+                        const isRoot = await git.isRootCommit(first.hash);
+                        if (isRoot) {
+                            baseHash = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+                        } else {
+                            baseHash = await git.getParentHash(first.hash);
+                        }
                     }
                 }
             }
@@ -403,7 +421,13 @@ Example:
                 }
                 const first = currentSession.commits[0];
                 if (!first) return;
-                baseHash = await git.getParentHash(first.hash);
+
+                const isRoot = await git.isRootCommit(first.hash);
+                if (isRoot) {
+                    baseHash = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+                } else {
+                    baseHash = await git.getParentHash(first.hash);
+                }
             }
 
             if (!baseHash) return;
@@ -443,7 +467,13 @@ Example:
                 }
                 const first = currentSession.commits[0];
                 if (!first) return;
-                baseHash = await git.getParentHash(first.hash);
+
+                const isRoot = await git.isRootCommit(first.hash);
+                if (isRoot) {
+                    baseHash = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+                } else {
+                    baseHash = await git.getParentHash(first.hash);
+                }
             }
 
             if (!baseHash) return;

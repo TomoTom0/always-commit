@@ -2,9 +2,16 @@ import fs from 'fs-extra';
 import path from 'path';
 import * as git from './git';
 
-export let STATE_FILE = path.join('.git', 'always-commit.json');
+const DEFAULT_STATE_FILE = path.join('.git', 'always-commit.json');
+export let STATE_FILE = DEFAULT_STATE_FILE;
 
 export async function getStatePath(): Promise<string> {
+    // If a custom state file has been set (e.g., for testing), use it as-is
+    if (STATE_FILE !== DEFAULT_STATE_FILE) {
+        return STATE_FILE;
+    }
+
+    // For the default state file, resolve it relative to git root
     if (path.isAbsolute(STATE_FILE)) return STATE_FILE;
     try {
         const root = await git.getGitRoot();

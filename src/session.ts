@@ -5,52 +5,23 @@ export async function getSession(options: { autoRepair: boolean } = { autoRepair
     const currentState = await state.loadState();
 
     // Level 1: Validate and Repair existing state
-    // We check from the *latest* commit backwards. If the latest commit doesn't exist (e.g. user did git reset --hard),
-    // we should pop it and check the next one.
+    // Filter out commits that don't exist or aren't ancestors of HEAD
     let commits = [...currentState.commits];
-    let changed = false;
+    let validCommits: state.Commit[] = [];
 
-    // Check availability of commits from newest to oldest
-    // If we find a commit that doesn't exist, we must remove it and all following it?
-    // Actually, in the `commits` array, index 0 is oldest, length-1 is newest.
-    // If length-1 is missing, pop it.
-    while (commits.length > 0) {
-        const last = commits[commits.length - 1];
-        if (!last) break;
-        const isValid = await git.isAncestor(last.hash);
-        if (!isValid) {
-            commits.pop();
-            changed = true;
-        } else {
-            // If the last one exists, we assume the chain is valid up to this point?
-            // Safer to assume "Yes" for performance, but we rely on the fact that we push sequentially.
-            // However, a user *could* rebase and remove an intermediate commit.
-            // For now, checking the tip is the most critical recovery for "reset --hard".
-            break;
+    for (const commit of commits) {
+        const isValid = await git.isAncestor(commit.hash);
+        if (isValid) {
+            validCommits.push(commit);
         }
     }
 
-    if (changed) {
-        currentState.commits = commits;
+    if (validCommits.length !== commits.length) {
+        currentState.commits = validCommits;
         await state.saveState(currentState);
     }
 
-    // If we still have commits, check that the first commit also exists
-    // (status/diff commands need to access the parent of the first commit)
-    if (commits.length > 0) {
-        const first = commits[0];
-        if (first) {
-            const isValidFirst = await git.isAncestor(first.hash);
-            if (!isValidFirst) {
-                // First commit doesn't exist, invalidate entire session
-                commits = [];
-                currentState.commits = commits;
-                await state.saveState(currentState);
-            }
-        }
-    }
-
-    // If we still have commits, we have a valid session (at least partially)
+    // If we still have commits, we have a valid session
     if (currentState.commits.length > 0) {
         return currentState;
     }

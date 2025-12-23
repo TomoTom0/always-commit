@@ -32,6 +32,15 @@ export async function getParentHash(hash: string): Promise<string> {
     return result.trim();
 }
 
+export async function isRootCommit(hash: string): Promise<boolean> {
+    try {
+        await git.revparse([`${hash}^`]);
+        return false; // Has a parent, not a root commit
+    } catch {
+        return true; // No parent, is a root commit
+    }
+}
+
 export interface CommitInfo {
     hash: string;
     parentHash: string;
