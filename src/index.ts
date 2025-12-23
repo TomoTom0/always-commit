@@ -412,18 +412,22 @@ Examples:
 program
     .command('status')
     .description('Show changed files since the base commit (first non-alcom commit).')
+    .argument('[args...]', 'Additional git diff arguments')
     .option('--base <hash>', 'Manually specify the base commit hash')
+    .allowUnknownOption()
     .addHelpText('after', `
 Example:
   $ always-commit status
   M  src/index.ts
   A  docs/new-doc.md
+  $ always-commit status --stat
+  $ always-commit status -- src/
   `)
-    .action(async (cmdOptions) => {
+    .action(async (args: string[], cmdOptions) => {
         try {
             const baseHash = cmdOptions.base || await git.findBaseCommit();
 
-            const proc = Bun.spawn(['git', 'diff', '--name-status', baseHash], {
+            const proc = Bun.spawn(['git', '--no-pager', 'diff', '--name-status', baseHash, ...args], {
                 stdin: 'inherit',
                 stdout: 'inherit',
                 stderr: 'inherit',
@@ -439,16 +443,21 @@ Example:
 program
     .command('diff')
     .description('Show changes since the base commit (first non-alcom commit).')
+    .argument('[args...]', 'Additional git diff arguments')
     .option('--base <hash>', 'Manually specify the base commit hash')
+    .allowUnknownOption()
     .addHelpText('after', `
 Example:
   $ always-commit diff
+  $ always-commit diff --stat
+  $ always-commit diff --name-only
+  $ always-commit diff -- src/
   `)
-    .action(async (cmdOptions) => {
+    .action(async (args: string[], cmdOptions) => {
         try {
             const baseHash = cmdOptions.base || await git.findBaseCommit();
 
-            const proc = Bun.spawn(['git', 'diff', baseHash], {
+            const proc = Bun.spawn(['git', '--no-pager', 'diff', baseHash, ...args], {
                 stdin: 'inherit',
                 stdout: 'inherit',
                 stderr: 'inherit',
