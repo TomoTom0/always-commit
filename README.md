@@ -98,4 +98,4 @@ alcom save "$prompt"
 
 ## License
 
-MIT
+[MIT](./LICENSE)

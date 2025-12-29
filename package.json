@@ -31,10 +31,11 @@
   "files": [
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "THIRD_PARTY_LICENSES.md"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target node && sed -i '1s|#!/usr/bin/env bun|#!/usr/bin/env node|' dist/index.js",
+    "build": "bun build src/index.ts --outdir dist --target node && node -e \"const fs = require('fs'); const f = 'dist/index.js'; fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('#!/usr/bin/env bun', '#!/usr/bin/env node'));\"",
     "test": "bun test test/*.ts",
     "prepublishOnly": "bun run build"
   },
