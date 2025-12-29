@@ -1,14 +1,45 @@
 {
   "name": "always-commit",
-  "module": "index.ts",
+  "version": "1.0.0",
+  "description": "LLM-assisted coding session snapshot management tool - automatic temporary commits during sessions",
   "type": "module",
-  "private": true,
-  "bin": {
-    "always-commit": "src/index.ts",
-    "alcom": "src/index.ts"
+  "license": "MIT",
+  "author": "TomoTom0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TomoTom0/always-commit.git"
   },
+  "bugs": {
+    "url": "https://github.com/TomoTom0/always-commit/issues"
+  },
+  "homepage": "https://github.com/TomoTom0/always-commit#readme",
+  "keywords": [
+    "git",
+    "commit",
+    "snapshot",
+    "llm",
+    "ai",
+    "coding",
+    "session",
+    "cli"
+  ],
+  "bin": {
+    "always-commit": "dist/index.js",
+    "alcom": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
-    "test": "bun test test/*.ts"
+    "build": "bun build src/index.ts --outdir dist --target node && sed -i '1s|#!/usr/bin/env bun|#!/usr/bin/env node|' dist/index.js",
+    "test": "bun test test/*.ts",
+    "prepublishOnly": "bun run build"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "@types/bun": "latest",
