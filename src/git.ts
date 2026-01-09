@@ -74,6 +74,16 @@ export async function commitTree(treeHash: string, parentHash: string, message: 
     return result.trim();
 }
 
+export async function commitTreeOrphan(treeHash: string, message: string): Promise<string> {
+    const result = await git.raw(['commit-tree', treeHash, '-m', message]);
+    return result.trim();
+}
+
+export async function getTreeHash(ref: string = 'HEAD'): Promise<string> {
+    const result = await git.raw(['rev-parse', `${ref}^{tree}`]);
+    return result.trim();
+}
+
 export async function updateRef(ref: string, commitHash: string): Promise<void> {
     await git.raw(['update-ref', ref, commitHash]);
 }
