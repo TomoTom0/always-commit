@@ -174,6 +174,18 @@ Example:
                 return;
             }
 
+            // EMPTY_TREEの場合（リポジトリの全コミットがalcomコミットの場合）
+            // 親なしの新しいルートコミットを作成する
+            if (baseHash === git.EMPTY_TREE) {
+                const treeHash = await git.getTreeHash('HEAD');
+                const newCommit = await git.commitTreeOrphan(treeHash, finalMessage);
+                const currentBranch = await git.getCurrentBranch();
+                await git.updateRef(`refs/heads/${currentBranch}`, newCommit);
+                await state.clearState();
+                console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: newCommit }));
+                return;
+            }
+
             await git.resetMixed(baseHash);
             await state.clearState();
 

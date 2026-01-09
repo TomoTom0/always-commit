@@ -11,29 +11,27 @@ async function run() {
     console.log(`Running test in ${tmpDir}`);
 
     try {
-        $.cwd(tmpDir);
-
         // Initialize git
-        await $`git init`;
-        await $`git config user.name "Test User"`;
-        await $`git config user.email "test@example.com"`;
-        await $`touch initial.txt`;
-        await $`git add .`;
-        await $`git commit -m "Initial commit"`;
+        await $`git init`.cwd(tmpDir);
+        await $`git config user.name "Test User"`.cwd(tmpDir);
+        await $`git config user.email "test@example.com"`.cwd(tmpDir);
+        await $`touch initial.txt`.cwd(tmpDir);
+        await $`git add .`.cwd(tmpDir);
+        await $`git commit -m "Initial commit"`.cwd(tmpDir);
 
         // First save
-        await $`echo "change 1" > file1.txt`;
-        await $`bun ${alcomPath} save "First change"`;
+        await $`echo "change 1" > file1.txt`.cwd(tmpDir);
+        await $`bun ${alcomPath} save "First change"`.cwd(tmpDir);
 
         // Second save
-        await $`echo "change 2" > file2.txt`;
-        await $`bun ${alcomPath} save "Second change"`;
+        await $`echo "change 2" > file2.txt`.cwd(tmpDir);
+        await $`bun ${alcomPath} save "Second change"`.cwd(tmpDir);
 
         // Finish with append
-        await $`bun ${alcomPath} finish "Feature complete" --append`;
+        await $`bun ${alcomPath} finish "Feature complete" --append`.cwd(tmpDir);
 
         // Check log
-        const log = await $`git log -1 --pretty=%B`.text();
+        const log = await $`git log -1 --pretty=%B`.cwd(tmpDir).text();
         console.log("Last commit message:");
         console.log(log);
 
