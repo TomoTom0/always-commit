@@ -179,8 +179,7 @@ Example:
             if (baseHash === git.EMPTY_TREE) {
                 const treeHash = await git.getTreeHash('HEAD');
                 const newCommit = await git.commitTreeOrphan(treeHash, finalMessage);
-                const currentBranch = await git.getCurrentBranch();
-                await git.updateRef(`refs/heads/${currentBranch}`, newCommit);
+                await git.resetHard(newCommit);
                 await state.clearState();
                 console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: newCommit }));
                 return;

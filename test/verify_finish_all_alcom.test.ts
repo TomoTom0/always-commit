@@ -36,15 +36,13 @@ async function run() {
         console.log(`Alcom commits: ${alcomCount}`);
 
         if (alcomCount < 3) {
-            console.log("Error: Expected at least 3 alcom commits");
-            process.exit(1);
+            throw new Error("Expected at least 3 alcom commits");
         }
 
         // Verify there are no non-alcom commits
         const commitCount = logBefore.trim().split("\n").length;
         if (alcomCount !== commitCount) {
-            console.log(`Error: Expected all ${commitCount} commits to be alcom commits`);
-            process.exit(1);
+            throw new Error(`Expected all ${commitCount} commits to be alcom commits`);
         }
 
         console.log("All commits are alcom commits. Testing finish...");
@@ -56,8 +54,7 @@ async function run() {
         // Verify the result
         const result = JSON.parse(finishResult);
         if (result.status !== "ok") {
-            console.log("Error: finish command failed");
-            process.exit(1);
+            throw new Error("finish command failed");
         }
         console.log("finish command succeeded with hash:", result.hash);
 
@@ -68,16 +65,14 @@ async function run() {
 
         const commitCountAfter = logAfter.trim().split("\n").length;
         if (commitCountAfter !== 1) {
-            console.log(`Error: Expected 1 commit after finish, got ${commitCountAfter}`);
-            process.exit(1);
+            throw new Error(`Expected 1 commit after finish, got ${commitCountAfter}`);
         }
         console.log("Commit count after finish is correct (1)");
 
         // Check that the commit message is correct
         const lastCommitMsg = await $`git log -1 --pretty=%B`.cwd(tmpDir).text();
         if (!lastCommitMsg.includes("feat: complete feature")) {
-            console.log("Error: Commit message is incorrect");
-            process.exit(1);
+            throw new Error("Commit message is incorrect");
         }
         console.log("Commit message is correct");
 
@@ -86,16 +81,14 @@ async function run() {
         console.log("Files in commit:", files);
 
         if (!files.includes("file1.txt") || !files.includes("file2.txt") || !files.includes("file3.txt")) {
-            console.log("Error: Not all files were preserved");
-            process.exit(1);
+            throw new Error("Not all files were preserved");
         }
         console.log("All files were preserved");
 
         // Check that the commit is a root commit (no parent)
         const parentCheck = await $`git rev-parse HEAD^`.cwd(tmpDir).nothrow();
         if (parentCheck.exitCode === 0) {
-            console.log("Error: The commit should be a root commit (no parent)");
-            process.exit(1);
+            throw new Error("The commit should be a root commit (no parent)");
         }
         console.log("The commit is a root commit (no parent)");
 
