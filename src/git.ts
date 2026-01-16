@@ -201,10 +201,11 @@ export async function findBaseCommit(limit: number = 100): Promise<string> {
 }
 
 export async function isAncestor(ancestor: string, descendant: string = 'HEAD'): Promise<boolean> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const proc = spawn('git', ['merge-base', '--is-ancestor', ancestor, descendant], {
             stdio: 'ignore'
         });
+        proc.on('error', reject);
         proc.on('close', (exitCode) => {
             resolve(exitCode === 0);
         });

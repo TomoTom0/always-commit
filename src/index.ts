@@ -409,8 +409,13 @@ Examples:
                 stdio: 'inherit',
             });
 
+            proc.on('error', (err) => {
+                console.error(`Failed to start git: ${err.message}`);
+                process.exit(1);
+            });
+
             proc.on('close', (exitCode) => {
-                process.exit(exitCode || 0);
+                process.exit(exitCode ?? 1);
             });
         } catch (error: any) {
             console.error(error.message);
@@ -441,8 +446,14 @@ Example:
             const proc = spawn('git', ['--no-pager', 'diff', '--name-status', baseHash, ...args], {
                 stdio: 'inherit',
             });
+
+            proc.on('error', (err) => {
+                console.error(`Failed to start git: ${err.message}`);
+                process.exit(1);
+            });
+
             proc.on('close', (exitCode) => {
-                process.exit(exitCode || 0);
+                process.exit(exitCode ?? 1);
             });
         } catch (error: any) {
             console.error(error.message);
@@ -470,8 +481,14 @@ Example:
             const proc = spawn('git', ['--no-pager', 'diff', baseHash, ...args], {
                 stdio: 'inherit',
             });
+
+            proc.on('error', (err) => {
+                console.error(`Failed to start git: ${err.message}`);
+                process.exit(1);
+            });
+
             proc.on('close', (exitCode) => {
-                process.exit(exitCode || 0);
+                process.exit(exitCode ?? 1);
             });
         } catch (error: any) {
             console.error(error.message);
