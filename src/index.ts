@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
+import { spawn } from 'child_process';
 import * as git from './git';
 import * as state from './state';
 import * as session from './session';
@@ -404,14 +405,13 @@ Examples:
 
             const processedArgs = args.map(arg => arg.replace('@base', baseHash));
 
-            const proc = Bun.spawn(['git', ...processedArgs], {
-                stdin: 'inherit',
-                stdout: 'inherit',
-                stderr: 'inherit',
+            const proc = spawn('git', processedArgs, {
+                stdio: 'inherit',
             });
 
-            const exitCode = await proc.exited;
-            process.exit(exitCode);
+            proc.on('close', (exitCode) => {
+                process.exit(exitCode || 0);
+            });
         } catch (error: any) {
             console.error(error.message);
             process.exit(1);
@@ -438,13 +438,12 @@ Example:
         try {
             const baseHash = cmdOptions.base || await git.findBaseCommit();
 
-            const proc = Bun.spawn(['git', '--no-pager', 'diff', '--name-status', baseHash, ...args], {
-                stdin: 'inherit',
-                stdout: 'inherit',
-                stderr: 'inherit',
+            const proc = spawn('git', ['--no-pager', 'diff', '--name-status', baseHash, ...args], {
+                stdio: 'inherit',
             });
-            const exitCode = await proc.exited;
-            process.exit(exitCode);
+            proc.on('close', (exitCode) => {
+                process.exit(exitCode || 0);
+            });
         } catch (error: any) {
             console.error(error.message);
             process.exit(1);
@@ -468,13 +467,12 @@ Example:
         try {
             const baseHash = cmdOptions.base || await git.findBaseCommit();
 
-            const proc = Bun.spawn(['git', '--no-pager', 'diff', baseHash, ...args], {
-                stdin: 'inherit',
-                stdout: 'inherit',
-                stderr: 'inherit',
+            const proc = spawn('git', ['--no-pager', 'diff', baseHash, ...args], {
+                stdio: 'inherit',
             });
-            const exitCode = await proc.exited;
-            process.exit(exitCode);
+            proc.on('close', (exitCode) => {
+                process.exit(exitCode || 0);
+            });
         } catch (error: any) {
             console.error(error.message);
             process.exit(1);
