@@ -1,4 +1,5 @@
 import simpleGit, { type SimpleGit } from 'simple-git';
+import { spawn } from 'child_process';
 
 const git: SimpleGit = simpleGit();
 
@@ -200,10 +201,13 @@ export async function findBaseCommit(limit: number = 100): Promise<string> {
 }
 
 export async function isAncestor(ancestor: string, descendant: string = 'HEAD'): Promise<boolean> {
-    const proc = Bun.spawn(['git', 'merge-base', '--is-ancestor', ancestor, descendant], {
-        stdout: 'ignore',
-        stderr: 'ignore'
+    return new Promise((resolve, reject) => {
+        const proc = spawn('git', ['merge-base', '--is-ancestor', ancestor, descendant], {
+            stdio: 'ignore'
+        });
+        proc.on('error', reject);
+        proc.on('close', (exitCode) => {
+            resolve(exitCode === 0);
+        });
     });
-    const exitCode = await proc.exited;
-    return exitCode === 0;
 }
