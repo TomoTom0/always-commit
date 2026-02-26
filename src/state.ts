@@ -5,6 +5,13 @@ import * as git from './git';
 const DEFAULT_STATE_FILE = path.join('.git', 'always-commit.json');
 export let STATE_FILE = DEFAULT_STATE_FILE;
 
+// State file path priorities (relative to git root)
+const STATE_FILE_PRIORITIES = [
+    path.join('.git', 'always-commit.json'),  // Priority 1
+    'always-commit.json',                      // Priority 2
+    '.always-commit.json'                      // Priority 3
+];
+
 export async function getStatePath(): Promise<string> {
     // If a custom state file has been set (e.g., for testing), use it as-is
     if (STATE_FILE !== DEFAULT_STATE_FILE) {
@@ -16,20 +23,16 @@ export async function getStatePath(): Promise<string> {
     try {
         const root = await git.getGitRoot();
 
-        // Priority 1: .git/always-commit.json
-        const gitInternal = path.join(root, '.git', 'always-commit.json');
-        if (await fs.pathExists(gitInternal)) {
-            return gitInternal;
+        // Check paths in priority order
+        for (const relativePath of STATE_FILE_PRIORITIES) {
+            const fullPath = path.join(root, relativePath);
+            if (await fs.pathExists(fullPath)) {
+                return fullPath;
+            }
         }
 
-        // Priority 2: Same level as .git - always-commit.json
-        const rootLevel = path.join(root, 'always-commit.json');
-        if (await fs.pathExists(rootLevel)) {
-            return rootLevel;
-        }
-
-        // Priority 3: Same level as .git - .always-commit.json (hidden file)
-        return path.join(root, '.always-commit.json');
+        // Return default path (lowest priority)
+        return path.join(root, STATE_FILE_PRIORITIES[STATE_FILE_PRIORITIES.length - 1]);
     } catch {
         // Fallback for when git root can't be found (e.g. not in a repo)
         return STATE_FILE;
@@ -72,13 +75,8 @@ export async function saveState(state: State): Promise<void> {
     const root = await git.getGitRoot();
 
     // Try paths in priority order
-    const paths = [
-        path.join(root, '.git', 'always-commit.json'),
-        path.join(root, 'always-commit.json'),
-        path.join(root, '.always-commit.json')
-    ];
-
-    for (const statePath of paths) {
+    for (const relativePath of STATE_FILE_PRIORITIES) {
+        const statePath = path.join(root, relativePath);
         try {
             await fs.writeJson(statePath, state, { spaces: 2 });
             return;
