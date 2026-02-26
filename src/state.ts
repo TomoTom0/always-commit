@@ -5,6 +5,13 @@ import * as git from './git';
 const DEFAULT_STATE_FILE = path.join('.git', 'always-commit.json');
 export let STATE_FILE = DEFAULT_STATE_FILE;
 
+// State file path priorities (relative to git root)
+const STATE_FILE_PRIORITIES = [
+    path.join('.git', 'always-commit.json'),  // Priority 1
+    'always-commit.json',                      // Priority 2
+    '.always-commit.json'                      // Priority 3
+];
+
 export async function getStatePath(): Promise<string> {
     // If a custom state file has been set (e.g., for testing), use it as-is
     if (STATE_FILE !== DEFAULT_STATE_FILE) {
@@ -15,7 +22,17 @@ export async function getStatePath(): Promise<string> {
     if (path.isAbsolute(STATE_FILE)) return STATE_FILE;
     try {
         const root = await git.getGitRoot();
-        return path.join(root, '.git', 'always-commit.json');
+
+        // Check paths in priority order
+        for (const relativePath of STATE_FILE_PRIORITIES) {
+            const fullPath = path.join(root, relativePath);
+            if (await fs.pathExists(fullPath)) {
+                return fullPath;
+            }
+        }
+
+        // Return default path (lowest priority)
+        return path.join(root, STATE_FILE_PRIORITIES[STATE_FILE_PRIORITIES.length - 1]);
     } catch {
         // Fallback for when git root can't be found (e.g. not in a repo)
         return STATE_FILE;
@@ -49,8 +66,26 @@ export async function loadState(): Promise<State> {
 }
 
 export async function saveState(state: State): Promise<void> {
-    const statePath = await getStatePath();
-    await fs.writeJson(statePath, state, { spaces: 2 });
+    // If a custom state file has been set, use it directly
+    if (STATE_FILE !== DEFAULT_STATE_FILE) {
+        await fs.writeJson(STATE_FILE, state, { spaces: 2 });
+        return;
+    }
+
+    const root = await git.getGitRoot();
+
+    // Try paths in priority order
+    for (const relativePath of STATE_FILE_PRIORITIES) {
+        const statePath = path.join(root, relativePath);
+        try {
+            await fs.writeJson(statePath, state, { spaces: 2 });
+            return;
+        } catch {
+            // Try next path
+        }
+    }
+
+    throw new Error('Failed to save state file');
 }
 
 export async function addCommit(hash: string, message: string): Promise<void> {
