@@ -15,7 +15,21 @@ export async function getStatePath(): Promise<string> {
     if (path.isAbsolute(STATE_FILE)) return STATE_FILE;
     try {
         const root = await git.getGitRoot();
-        return path.join(root, '.git', 'always-commit.json');
+
+        // Priority 1: .git/always-commit.json
+        const gitInternal = path.join(root, '.git', 'always-commit.json');
+        if (await fs.pathExists(gitInternal)) {
+            return gitInternal;
+        }
+
+        // Priority 2: Same level as .git - always-commit.json
+        const rootLevel = path.join(root, 'always-commit.json');
+        if (await fs.pathExists(rootLevel)) {
+            return rootLevel;
+        }
+
+        // Priority 3: Same level as .git - .always-commit.json (hidden file)
+        return path.join(root, '.always-commit.json');
     } catch {
         // Fallback for when git root can't be found (e.g. not in a repo)
         return STATE_FILE;
@@ -49,8 +63,31 @@ export async function loadState(): Promise<State> {
 }
 
 export async function saveState(state: State): Promise<void> {
-    const statePath = await getStatePath();
-    await fs.writeJson(statePath, state, { spaces: 2 });
+    // If a custom state file has been set, use it directly
+    if (STATE_FILE !== DEFAULT_STATE_FILE) {
+        await fs.writeJson(STATE_FILE, state, { spaces: 2 });
+        return;
+    }
+
+    const root = await git.getGitRoot();
+
+    // Try paths in priority order
+    const paths = [
+        path.join(root, '.git', 'always-commit.json'),
+        path.join(root, 'always-commit.json'),
+        path.join(root, '.always-commit.json')
+    ];
+
+    for (const statePath of paths) {
+        try {
+            await fs.writeJson(statePath, state, { spaces: 2 });
+            return;
+        } catch {
+            // Try next path
+        }
+    }
+
+    throw new Error('Failed to save state file');
 }
 
 export async function addCommit(hash: string, message: string): Promise<void> {
