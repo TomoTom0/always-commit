@@ -5,13 +5,14 @@ import * as git from './git';
 import * as state from './state';
 import * as session from './session';
 import { isAllowed } from './config';
+import { version } from '../package.json';
 
 const program = new Command();
 
 program
     .name('always-commit')
     .description('A tool to manage temporary git snapshots during LLM-assisted coding sessions.')
-    .version('0.0.1')
+    .version(version)
     .option('-d, --dry-run', 'Simulate the command without making any changes')
     .hook('preAction', async (thisCommand, actionCommand) => {
         // Commands that require permission check
