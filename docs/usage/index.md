@@ -177,15 +177,46 @@ $ alcom log
 - `status`, `diff` コマンドは、Git の空のツリーハッシュを base として使用します
 - root commit を含むセッションでも、すべてのコマンドが正常に動作します
 
-## 活用例
+### `setup`
 
-### Claude Code Hook
-
-Claude Codeの `user_prompt_submit` フックなどで使用するスクリプト例です。プロンプトの冒頭30文字をコミットメッセージとして保存します。
+Claude Code との連携設定を自動化します。hookスクリプトの配置と `settings.json` へのhook登録を行います。
 
 ```bash
-#!/bin/bash
-input=$(cat)
-prompt=$(echo "$input" | jq -r .prompt | sed -E 's/^(.{30}).*$/\1/')
-alcom save "$prompt"
+alcom setup
+```
+
+- **--project**: プロジェクト設定（`.claude/settings.json`）に登録。デフォルトはグローバル（`~/.claude/settings.json`）
+- **--script-dir \<dir\>**: hookスクリプトの配置先ディレクトリ（デフォルト: `~/.local/bin`）
+- **動作**:
+    1. `alcom-save.sh` をスクリプトディレクトリに配置します
+    2. `UserPromptSubmit` hookを `settings.json` に登録します
+    3. `PreToolUse` ブランチ切り替えガードを `settings.json` に登録します
+
+### `docs`
+
+ドキュメントを表示します。
+
+```bash
+alcom docs [topic]
+```
+
+- **[topic]**: 表示するトピック（`usage`, `dev`, `design`）。省略するとトピック一覧を表示します。
+
+```bash
+# トピック一覧を表示
+alcom docs
+
+# ユーザーガイドを表示
+alcom docs usage
+```
+
+## 活用例
+
+### Claude Code との連携
+
+Claude Code との連携方法（hookスクリプト・settings.json設定・ワークフロー）の詳細は [agent-integration.md](agent-integration.md) を参照してください。
+
+```bash
+# 自動セットアップ
+alcom setup
 ```

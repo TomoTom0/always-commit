@@ -1,10 +1,15 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
 import { spawn } from 'child_process';
+import { readFile, readdir } from 'node:fs/promises';
+import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
 import * as git from './git';
 import * as state from './state';
 import * as session from './session';
 import { isAllowed } from './config';
+import { setup as runSetup } from './setup';
 import { version } from '../package.json';
 
 const program = new Command();
@@ -544,6 +549,116 @@ Example:
 
         } catch (error: any) {
             console.error(JSON.stringify({ status: 'error', message: error.message }));
+            process.exit(1);
+        }
+    });
+
+program
+    .command('setup')
+    .description('Configure Claude Code integration by registering hooks in settings.json.')
+    .option('--project', 'Install to project settings (.claude/settings.json) instead of global (~/.claude/settings.json)')
+    .option('--script-dir <dir>', 'Directory to install the hook script', `${os.homedir()}/.local/bin`)
+    .addHelpText('after', `
+Description:
+  Installs the hook script and registers it in Claude Code's settings.json.
+  By default, modifies the global settings (~/.claude/settings.json).
+
+  Registered hooks:
+    UserPromptSubmit  Save a snapshot on every prompt submission
+    PreToolUse        Block git checkout/switch when snapshots exist
+
+Examples:
+  $ alcom setup
+  $ alcom setup --project
+  $ alcom setup --script-dir /usr/local/bin
+  $ alcom setup --dry-run
+  `)
+    .action(async (cmdOptions) => {
+        try {
+            const globalOptions = program.opts();
+            const result = await runSetup({
+                project: cmdOptions.project ?? false,
+                scriptDir: cmdOptions.scriptDir,
+                dryRun: globalOptions.dryRun ?? false,
+            });
+
+            if (globalOptions.dryRun) {
+                console.log('[Dry Run] Setup would make the following changes:');
+                console.log(`  Hook script: ${result.scriptPath}`);
+                console.log(`  Settings file: ${result.settingsPath}`);
+                if (result.userPromptSubmitAdded) console.log('  + UserPromptSubmit hook');
+                if (result.preToolUseAdded) console.log('  + PreToolUse branch guard');
+            } else {
+                console.log('Setup complete.');
+                if (result.scriptInstalled) console.log(`  Hook script installed: ${result.scriptPath}`);
+                if (result.userPromptSubmitAdded) console.log(`  UserPromptSubmit hook added to: ${result.settingsPath}`);
+                if (result.preToolUseAdded) console.log(`  PreToolUse branch guard added to: ${result.settingsPath}`);
+                if (!result.userPromptSubmitAdded && !result.preToolUseAdded) {
+                    console.log('  Hooks already configured. Nothing to change.');
+                }
+            }
+        } catch (error: any) {
+            console.error(error.message);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('docs')
+    .description('Show documentation.')
+    .argument('[topic]', 'Documentation topic (e.g. usage, dev, design)')
+    .addHelpText('after', `
+Available topics:
+  usage    User guide and command reference
+  dev      Developer guide and architecture
+  design   Initial design document
+
+Examples:
+  $ alcom docs
+  $ alcom docs usage
+  $ alcom docs dev
+  `)
+    .action(async (topic?: string) => {
+        try {
+            const __dirname = path.dirname(fileURLToPath(import.meta.url));
+            const docsDir = path.join(__dirname, '..', 'docs');
+
+            if (!topic) {
+                let entries: string[];
+                try {
+                    entries = await readdir(docsDir);
+                } catch {
+                    console.error('Documentation directory not found.');
+                    process.exit(1);
+                }
+                const topics = entries.filter(e => !e.endsWith('.md'));
+                console.log('Available topics:');
+                for (const t of topics) {
+                    console.log(`  ${t}`);
+                }
+                return;
+            }
+
+            const topicDir = path.join(docsDir, topic);
+            let files: string[];
+            try {
+                files = await readdir(topicDir);
+            } catch {
+                console.error(`Unknown topic: "${topic}". Run 'alcom docs' to see available topics.`);
+                process.exit(1);
+            }
+
+            const mdFiles = files.filter(f => f.endsWith('.md'));
+            if (mdFiles.length === 0) {
+                console.error(`No documentation found for topic: "${topic}"`);
+                process.exit(1);
+            }
+
+            const filename = mdFiles.includes('index.md') ? 'index.md' : mdFiles[0];
+            const content = await readFile(path.join(topicDir, filename as string), 'utf-8');
+            console.log(content);
+        } catch (error: any) {
+            console.error(error.message);
             process.exit(1);
         }
     });
