@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { setup } from '../src/setup';
-import { readFile, rm, mkdir, access } from 'node:fs/promises';
+import { readFile, writeFile, rm, mkdir, access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'path';
 import os from 'os';
@@ -65,9 +65,9 @@ describe('setup', () => {
         const scriptDir = path.join(TMP_DIR, 'bin');
         const settingsPath = path.join(TMP_DIR, '.claude', 'settings.json');
         await mkdir(path.dirname(settingsPath), { recursive: true });
-        await import('node:fs/promises').then(fs => fs.writeFile(settingsPath, JSON.stringify({
+        await writeFile(settingsPath, JSON.stringify({
             hooks: { UserPromptSubmit: [{ matcher: '', hooks: [{ type: 'command', command: 'other-tool' }] }] }
-        }), 'utf-8'));
+        }), 'utf-8');
 
         await setup({ project: false, scriptDir, dryRun: false, settingsPathOverride: settingsPath });
 

@@ -1,6 +1,7 @@
 import path from 'path';
 import os from 'os';
-import { readFile, writeFile, mkdir, copyFile, access } from 'node:fs/promises';
+import { fileURLToPath } from 'url';
+import { readFile, writeFile, mkdir, copyFile, access, chmod } from 'node:fs/promises';
 import { constants } from 'node:fs';
 
 export interface SetupOptions {
@@ -53,7 +54,7 @@ function isAlcomHookPresent(hooks: unknown[]): boolean {
 }
 
 export async function setup(options: SetupOptions): Promise<SetupResult> {
-    const __dirname = path.dirname(new URL(import.meta.url).pathname);
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const hookScriptSrc = path.join(__dirname, '..', 'scripts', 'claude-code-hook.sh');
     const scriptPath = path.join(options.scriptDir, 'alcom-save.sh');
 
@@ -76,7 +77,6 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
         await mkdir(options.scriptDir, { recursive: true });
         await copyFile(hookScriptSrc, scriptPath);
         // Make executable
-        const { chmod } = await import('node:fs/promises');
         await chmod(scriptPath, 0o755);
     }
     result.scriptInstalled = true;
