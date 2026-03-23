@@ -7,7 +7,22 @@
 ## インストール
 
 ```bash
+npm install -g always-commit
+```
+
+npxで実行する場合（インストール不要）：
+
+```bash
+npx always-commit <command>
+```
+
+開発用（ソースから実行）：
+
+```bash
+git clone https://github.com/TomoTom0/always-commit.git
+cd always-commit
 bun install
+bun link
 ```
 
 ## コマンド
@@ -17,7 +32,7 @@ bun install
 現在の作業内容の一時的なスナップショットを保存します。
 
 ```bash
-bun run src/index.ts save [message]
+alcom save [message]
 ```
 
 - **[message]**: オプション。スナップショットの説明。デフォルトは "WIP: snapshot" です。
@@ -28,7 +43,7 @@ bun run src/index.ts save [message]
 直前のスナップショットを取り消します。
 
 ```bash
-bun run src/index.ts undo
+alcom undo
 ```
 
 - **動作**: 最後のコミットを取り消し（前の状態へのハードリセット）、内部状態から削除します。
@@ -39,7 +54,7 @@ bun run src/index.ts undo
 すべての一時的なスナップショットを1つのコミットにまとめます。
 
 ```bash
-bun run src/index.ts finish <message>
+alcom finish <message>
 ```
 
 - **<message>**: 必須。最終的なコミットメッセージ。
