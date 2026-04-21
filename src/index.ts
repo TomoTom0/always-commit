@@ -637,7 +637,13 @@ Examples:
                 console.log('Available topics:');
                 for (const t of topics) {
                     const topicDir = path.join(docsDir, t);
-                    const topicFiles = (await readdir(topicDir)).filter(f => f.endsWith('.md'));
+                    let topicFiles: string[];
+                    try {
+                        topicFiles = (await readdir(topicDir)).filter(f => f.endsWith('.md'));
+                    } catch {
+                        continue;
+                    }
+                    if (topicFiles.length === 0) continue;
                     if (topicFiles.length === 1) {
                         console.log(`  ${t}`);
                     } else {
