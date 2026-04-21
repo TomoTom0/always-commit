@@ -75,7 +75,7 @@ chmod +x ~/.local/bin/alcom-save.sh
 
 ## 推奨: ブランチ切り替え時のガード
 
-セッション中に `git checkout` / `git switch` を実行すると、一時スナップショットが意図しないブランチに残留します。`PreToolUse` hook で防止できます。
+セッション中に `git checkout` / `git switch` でブランチを切り替えると、一時スナップショットが意図しないブランチに残留します。`PreToolUse` hook で防止できます（`git checkout -- <file>` などのファイル復元操作はブロックされません）。
 
 ```json
 {
@@ -86,7 +86,7 @@ chmod +x ~/.local/bin/alcom-save.sh
         "hooks": [
           {
             "type": "command",
-            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE 'git (checkout|switch)'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了コミットがあります。先にalcom finishを実行してください。\"}}'; fi; fi"
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE 'git checkout(\\s+[^\\s-]|\\s*$)' || echo \"$cmd\" | grep -qE 'git switch'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了コミットがあります。先にalcom finishを実行してください。\"}}'; fi; fi"
           }
         ]
       }
