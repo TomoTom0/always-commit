@@ -106,6 +106,8 @@ chmod +x ~/.local/bin/alcom-save.sh
 }
 ```
 
+> **注意（既存設定の確認）**: 手動設定や古いバージョンの `alcom setup` で構成した場合、`~/.claude/settings.json` の正規表現が `-[bc]` になっている可能性があります。`-c` は `git checkout` に存在しないオプション（`git switch -c` のオプション）です。`git checkout -B` によるブランチ強制作成をブロックするには `-[bB]` が正しい指定です。該当する場合は手動で修正してください。
+
 ## 無効化
 
 特定のプロジェクトで alcom を無効にしたい場合は、プロジェクトルートの `.env` または `.env.local` に以下を追記します。
