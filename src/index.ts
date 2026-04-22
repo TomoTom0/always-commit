@@ -565,7 +565,7 @@ Description:
 
   Registered hooks:
     UserPromptSubmit  Save a snapshot on every prompt submission
-    PreToolUse        Block git checkout/switch when snapshots exist
+    PreToolUse        Block git checkout (branch switch only) / git switch when snapshots exist
 
 Examples:
   $ alcom setup
@@ -607,6 +607,7 @@ program
     .command('docs')
     .description('Show documentation.')
     .argument('[topic]', 'Documentation topic (e.g. usage, dev, design)')
+    .argument('[file]', 'Specific file within topic (e.g. agent-integration)')
     .addHelpText('after', `
 Available topics:
   usage    User guide and command reference
@@ -616,9 +617,10 @@ Available topics:
 Examples:
   $ alcom docs
   $ alcom docs usage
+  $ alcom docs usage agent-integration
   $ alcom docs dev
   `)
-    .action(async (topic?: string) => {
+    .action(async (topic?: string, file?: string) => {
         try {
             const __dirname = path.dirname(fileURLToPath(import.meta.url));
             const docsDir = path.join(__dirname, '..', 'docs');
@@ -634,7 +636,19 @@ Examples:
                 const topics = entries.filter(e => !e.endsWith('.md'));
                 console.log('Available topics:');
                 for (const t of topics) {
-                    console.log(`  ${t}`);
+                    const topicDir = path.join(docsDir, t);
+                    let topicFiles: string[];
+                    try {
+                        topicFiles = (await readdir(topicDir)).filter(f => f.endsWith('.md'));
+                    } catch {
+                        continue;
+                    }
+                    if (topicFiles.length === 0) continue;
+                    if (topicFiles.length === 1) {
+                        console.log(`  ${t}`);
+                    } else {
+                        console.log(`  ${t}  (${topicFiles.map(f => f.replace(/\.md$/, '')).join(', ')})`);
+                    }
                 }
                 return;
             }
@@ -654,9 +668,24 @@ Examples:
                 process.exit(1);
             }
 
-            const filename = mdFiles.includes('index.md') ? 'index.md' : mdFiles[0];
-            const content = await readFile(path.join(topicDir, filename as string), 'utf-8');
-            console.log(content);
+            if (file) {
+                const target = file.endsWith('.md') ? file : `${file}.md`;
+                if (!mdFiles.includes(target)) {
+                    console.error(`Unknown file: "${file}". Available: ${mdFiles.map(f => f.replace(/\.md$/, '')).join(', ')}`);
+                    process.exit(1);
+                }
+                const content = await readFile(path.join(topicDir, target), 'utf-8');
+                console.log(content);
+            } else {
+                const filename = mdFiles.includes('index.md') ? 'index.md' : mdFiles[0];
+                const content = await readFile(path.join(topicDir, filename as string), 'utf-8');
+                console.log(content);
+                if (mdFiles.length > 1) {
+                    const others = mdFiles.filter(f => f !== filename);
+                    console.log(`\n--- More in "${topic}": ${others.map(f => f.replace(/\.md$/, '')).join(', ')} ---`);
+                    console.log(`Use: alcom docs ${topic} <file>`);
+                }
+            }
         } catch (error: any) {
             console.error(error.message);
             process.exit(1);

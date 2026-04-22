@@ -117,9 +117,9 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
                     type: 'command',
                     command:
                         'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
-                        'if echo "$cmd" | grep -qE \'git (checkout|switch)\'; then ' +
+                        'if echo "$cmd" | grep -qE \'git checkout(\\s+-[bB]|\\s+[^\\s-]|\\s*$)\' || echo "$cmd" | grep -qE \'git switch\'; then ' +
                         'if [ -n "$(alcom log 2>/dev/null)" ]; then ' +
-                        'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "alcomの未完了コミットがあります。先にalcom finishを実行してください。"}}\'; ' +
+                        'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "alcomの未完了コミットがあります。先にalcom finishを実行してください。なお、alcom finishを実行するとスナップショットコミットが1つにまとめられ消滅します。切り替え後に必要な作業が残っていないか（未反映の変更、別ブランチへの移植が必要な修正など）を確認してからfinishしてください。"}}\'; ' +
                         'fi; fi',
                 },
             ],

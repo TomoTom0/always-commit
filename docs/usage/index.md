@@ -212,10 +212,11 @@ alcom setup
 ドキュメントを表示します。
 
 ```bash
-alcom docs [topic]
+alcom docs [topic] [file]
 ```
 
 - **[topic]**: 表示するトピック（`usage`, `dev`, `design`）。省略するとトピック一覧を表示します。
+- **[file]**: トピック内の特定ファイル（拡張子省略可）。省略すると`index.md`を表示します。
 
 ```bash
 # トピック一覧を表示
