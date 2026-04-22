@@ -106,7 +106,7 @@ chmod +x ~/.local/bin/alcom-save.sh
 }
 ```
 
-> **注意**: 手動設定や古いバージョンの `alcom setup` で構成した場合は `~/.claude/settings.json` の正規表現を確認してください。古いバージョンでは誤った文字クラスが設定されている場合があります。
+> **注意**: 手動設定や古いバージョンの `alcom setup` で構成した場合は、上記の内容を参照して `~/.claude/settings.json` を確認・修正してください。
 
 ## 無効化
 
