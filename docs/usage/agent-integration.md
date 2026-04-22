@@ -86,7 +86,7 @@ chmod +x ~/.local/bin/alcom-save.sh
         "hooks": [
           {
             "type": "command",
-            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE 'git checkout(\\s+-[bB]|\\s+[^\\s-]|\\s*$)' || echo \"$cmd\" | grep -qE 'git switch'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了コミットがあります。先にalcom finishを実行してください。\"}}'; fi; fi"
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE 'git checkout(\\s+-[bB]|\\s+[^\\s-]|\\s*$)' || echo \"$cmd\" | grep -qE 'git switch'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了コミットがあります。先にalcom finishを実行してください。なお、alcom finishを実行するとスナップショットコミットが1つにまとめられ消滅します。切り替え後に必要な作業が残っていないか（未反映の変更、別ブランチへの移植が必要な修正など）を確認してからfinishしてください。\"}}'; fi; fi"
           }
         ]
       }
@@ -105,8 +105,6 @@ chmod +x ~/.local/bin/alcom-save.sh
   }
 }
 ```
-
-> **注意**: 手動設定や古いバージョンの `alcom setup` で構成した場合は、上記の内容を参照して `~/.claude/settings.json` を確認・修正してください。
 
 ## 無効化
 
