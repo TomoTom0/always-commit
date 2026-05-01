@@ -52,6 +52,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "always-commit": "link:",
     "commander": "^14.0.2",
     "fs-extra": "^11.3.2",
     "simple-git": "^3.30.0"
