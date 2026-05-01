@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 import { Command } from 'commander';
 import { spawn } from 'child_process';
 import { readFile, readdir } from 'node:fs/promises';

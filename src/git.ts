@@ -137,41 +137,29 @@ export function isAlcomCommit(message: string): boolean {
     return message.includes('--alcom--');
 }
 
-async function* walkCommitHistory(startHash: string, limit: number = 100): AsyncGenerator<CommitInfo> {
-    let currentHash = startHash;
-    
-    for (let i = 0; i < limit; i++) {
-        const rawLog = await git.raw([
-            'log',
-            '--pretty=format:%H|%P|%T|%cd|%s',
-            '--date=format:%Y-%m-%d %H:%M:%S',
-            '-n', '1',
-            currentHash
-        ]);
-        
-        if (!rawLog.trim()) break;
-        
-        const parsed = parseGitLog(rawLog);
-        const commit = parsed[0];
-        if (!commit) break;
-        
+async function* walkCommitHistory(startHash: string): AsyncGenerator<CommitInfo> {
+    const rawLog = await git.raw([
+        'log',
+        '--pretty=format:%H|%P|%T|%cd|%s',
+        '--date=format:%Y-%m-%d %H:%M:%S',
+        startHash
+    ]);
+
+    if (!rawLog.trim()) return;
+
+    const commits = parseGitLog(rawLog);
+    for (const commit of commits) {
         yield commit;
-        
-        try {
-            currentHash = await getParentHash(currentHash);
-        } catch {
-            break;
-        }
     }
 }
 
-export async function findLatestAlcomSession(limit: number = 50): Promise<CommitInfo[]> {
+export async function findLatestAlcomSession(): Promise<CommitInfo[]> {
     const sessionCommits: CommitInfo[] = [];
-    
+
     try {
         const startHash = await getCurrentHead();
-        
-        for await (const commit of walkCommitHistory(startHash, limit)) {
+
+        for await (const commit of walkCommitHistory(startHash)) {
             if (!isAlcomCommit(commit.message)) {
                 break;
             }
@@ -180,20 +168,20 @@ export async function findLatestAlcomSession(limit: number = 50): Promise<Commit
     } catch {
         return [];
     }
-    
+
     return sessionCommits.reverse();
 }
 
-export async function findBaseCommit(limit: number = 100): Promise<string> {
+export async function findBaseCommit(): Promise<string> {
     try {
         const startHash = await getCurrentHead();
-        
-        for await (const commit of walkCommitHistory(startHash, limit)) {
+
+        for await (const commit of walkCommitHistory(startHash)) {
             if (!isAlcomCommit(commit.message)) {
                 return commit.hash;
             }
         }
-        
+
         return EMPTY_TREE;
     } catch {
         return EMPTY_TREE;

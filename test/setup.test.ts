@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { setup } from '../src/setup';
 import { readFile, writeFile, rm, mkdir, access } from 'node:fs/promises';
 import { constants } from 'node:fs';
@@ -40,8 +40,8 @@ describe('setup', () => {
         await setup({ project: false, scriptDir, dryRun: false, settingsPathOverride: settingsPath });
 
         const content = JSON.parse(await readFile(settingsPath, 'utf-8'));
-        expect(content.hooks.UserPromptSubmit).toBeArray();
-        expect(content.hooks.PreToolUse).toBeArray();
+        expect(content.hooks.UserPromptSubmit).toBeInstanceOf(Array);
+        expect(content.hooks.PreToolUse).toBeInstanceOf(Array);
         expect(content.hooks.UserPromptSubmit.length).toBe(1);
         expect(content.hooks.PreToolUse.length).toBe(1);
     });

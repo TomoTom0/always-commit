@@ -1,54 +1,31 @@
+import { test, expect } from 'vitest';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { alcomOrThrow, gitInit, shOrThrow } from './helpers';
 
-import { $ } from "bun";
-import { join } from "path";
-import { tmpdir } from "os";
-import { mkdtemp, rm } from "fs/promises";
-
-const alcomPath = join(import.meta.dir, "../src/index.ts");
-
-async function run() {
-    const tmpDir = await mkdtemp(join(tmpdir(), "alcom-test-"));
-    console.log(`Running test in ${tmpDir}`);
+test('finish --append includes alcom save messages', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-test-'));
 
     try {
-        // Initialize git
-        await $`git init`.cwd(tmpDir);
-        await $`git config user.name "Test User"`.cwd(tmpDir);
-        await $`git config user.email "test@example.com"`.cwd(tmpDir);
-        await $`touch initial.txt`.cwd(tmpDir);
-        await $`git add .`.cwd(tmpDir);
-        await $`git commit -m "Initial commit"`.cwd(tmpDir);
+        gitInit(tmpDir);
+        await writeFile(join(tmpDir, 'initial.txt'), '');
+        shOrThrow('git', ['add', '.'], { cwd: tmpDir });
+        shOrThrow('git', ['commit', '-m', 'Initial commit'], { cwd: tmpDir });
 
-        // First save
-        await $`echo "change 1" > file1.txt`.cwd(tmpDir);
-        await $`bun ${alcomPath} save "First change"`.cwd(tmpDir);
+        await writeFile(join(tmpDir, 'file1.txt'), 'change 1\n');
+        alcomOrThrow(['save', 'First change'], tmpDir);
 
-        // Second save
-        await $`echo "change 2" > file2.txt`.cwd(tmpDir);
-        await $`bun ${alcomPath} save "Second change"`.cwd(tmpDir);
+        await writeFile(join(tmpDir, 'file2.txt'), 'change 2\n');
+        alcomOrThrow(['save', 'Second change'], tmpDir);
 
-        // Finish with append
-        await $`bun ${alcomPath} finish "Feature complete" --append`.cwd(tmpDir);
+        alcomOrThrow(['finish', 'Feature complete', '--append'], tmpDir);
 
-        // Check log
-        const log = await $`git log -1 --pretty=%B`.cwd(tmpDir).text();
-        console.log("Last commit message:");
-        console.log(log);
-
-        if (log.includes("Feature complete") && log.includes("- First change") && log.includes("- Second change")) {
-            console.log("Verification PASSED");
-        } else {
-            console.log("Verification FAILED");
-            process.exit(1);
-        }
-
-    } catch (error) {
-        console.error("Test failed", error);
-        process.exit(1);
+        const log = shOrThrow('git', ['log', '-1', '--pretty=%B'], { cwd: tmpDir }).stdout;
+        expect(log).toContain('Feature complete');
+        expect(log).toContain('- First change');
+        expect(log).toContain('- Second change');
     } finally {
-        // Cleanup
         await rm(tmpDir, { recursive: true, force: true });
     }
-}
-
-run();
+}, 60000);
