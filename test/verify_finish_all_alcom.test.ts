@@ -1,106 +1,49 @@
+import { test, expect } from 'vitest';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { alcomOrThrow, gitInit, shOrThrow } from './helpers';
 
-import { $ } from "bun";
-import { join } from "path";
-import { tmpdir } from "os";
-import { mkdtemp, rm } from "fs/promises";
-
-const alcomPath = join(import.meta.dir, "../src/index.ts");
-
-async function run() {
-    const tmpDir = await mkdtemp(join(tmpdir(), "alcom-test-"));
-    console.log(`Running test in ${tmpDir}`);
+test('finish creates orphan root commit when all commits are alcom', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-test-'));
 
     try {
-        // Initialize git
-        await $`git init`.cwd(tmpDir);
-        await $`git config user.name "Test User"`.cwd(tmpDir);
-        await $`git config user.email "test@example.com"`.cwd(tmpDir);
+        gitInit(tmpDir);
 
-        // Create first commit as an alcom save (not a regular commit)
-        await $`echo "file1" > file1.txt`.cwd(tmpDir);
-        await $`bun ${alcomPath} save "first save"`.cwd(tmpDir);
+        await writeFile(join(tmpDir, 'file1.txt'), 'file1\n');
+        alcomOrThrow(['save', 'first save'], tmpDir);
 
-        // Create more alcom saves
-        await $`echo "file2" > file2.txt`.cwd(tmpDir);
-        await $`bun ${alcomPath} save "second save"`.cwd(tmpDir);
+        await writeFile(join(tmpDir, 'file2.txt'), 'file2\n');
+        alcomOrThrow(['save', 'second save'], tmpDir);
 
-        await $`echo "file3" > file3.txt`.cwd(tmpDir);
-        await $`bun ${alcomPath} save "third save"`.cwd(tmpDir);
+        await writeFile(join(tmpDir, 'file3.txt'), 'file3\n');
+        alcomOrThrow(['save', 'third save'], tmpDir);
 
-        // Verify all commits are alcom commits
-        const logBefore = await $`git log --oneline`.cwd(tmpDir).text();
-        console.log("Commits before finish:");
-        console.log(logBefore);
-
+        const logBefore = shOrThrow('git', ['log', '--oneline'], { cwd: tmpDir }).stdout;
         const alcomCount = (logBefore.match(/--alcom--/g) || []).length;
-        console.log(`Alcom commits: ${alcomCount}`);
+        expect(alcomCount).toBeGreaterThanOrEqual(3);
 
-        if (alcomCount < 3) {
-            throw new Error("Expected at least 3 alcom commits");
-        }
+        const commitCount = logBefore.trim().split('\n').length;
+        expect(alcomCount).toBe(commitCount);
 
-        // Verify there are no non-alcom commits
-        const commitCount = logBefore.trim().split("\n").length;
-        if (alcomCount !== commitCount) {
-            throw new Error(`Expected all ${commitCount} commits to be alcom commits`);
-        }
+        const finishOut = alcomOrThrow(['finish', 'feat: complete feature'], tmpDir).stdout;
+        const result = JSON.parse(finishOut);
+        expect(result.status).toBe('ok');
 
-        console.log("All commits are alcom commits. Testing finish...");
+        const logAfter = shOrThrow('git', ['log', '--oneline'], { cwd: tmpDir }).stdout;
+        expect(logAfter.trim().split('\n').length).toBe(1);
 
-        // Finish - this should create a new root commit
-        const finishResult = await $`bun ${alcomPath} finish "feat: complete feature"`.cwd(tmpDir).text();
-        console.log("Finish result:", finishResult);
+        const lastMsg = shOrThrow('git', ['log', '-1', '--pretty=%B'], { cwd: tmpDir }).stdout;
+        expect(lastMsg).toContain('feat: complete feature');
 
-        // Verify the result
-        const result = JSON.parse(finishResult);
-        if (result.status !== "ok") {
-            throw new Error("finish command failed");
-        }
-        console.log("finish command succeeded with hash:", result.hash);
+        const files = shOrThrow('git', ['ls-tree', '-r', 'HEAD', '--name-only'], { cwd: tmpDir }).stdout;
+        expect(files).toContain('file1.txt');
+        expect(files).toContain('file2.txt');
+        expect(files).toContain('file3.txt');
 
-        // Check that there is now only one commit
-        const logAfter = await $`git log --oneline`.cwd(tmpDir).text();
-        console.log("Commits after finish:");
-        console.log(logAfter);
-
-        const commitCountAfter = logAfter.trim().split("\n").length;
-        if (commitCountAfter !== 1) {
-            throw new Error(`Expected 1 commit after finish, got ${commitCountAfter}`);
-        }
-        console.log("Commit count after finish is correct (1)");
-
-        // Check that the commit message is correct
-        const lastCommitMsg = await $`git log -1 --pretty=%B`.cwd(tmpDir).text();
-        if (!lastCommitMsg.includes("feat: complete feature")) {
-            throw new Error("Commit message is incorrect");
-        }
-        console.log("Commit message is correct");
-
-        // Check that all files exist
-        const files = await $`git ls-tree -r HEAD --name-only`.cwd(tmpDir).text();
-        console.log("Files in commit:", files);
-
-        if (!files.includes("file1.txt") || !files.includes("file2.txt") || !files.includes("file3.txt")) {
-            throw new Error("Not all files were preserved");
-        }
-        console.log("All files were preserved");
-
-        // Check that the commit is a root commit (no parent)
-        const parentCheck = await $`git rev-parse HEAD^`.cwd(tmpDir).nothrow();
-        if (parentCheck.exitCode === 0) {
-            throw new Error("The commit should be a root commit (no parent)");
-        }
-        console.log("The commit is a root commit (no parent)");
-
-        console.log("\nVerification PASSED");
-
-    } catch (error) {
-        console.error("Test failed", error);
-        process.exit(1);
+        const parent = shOrThrow('git', ['rev-list', '--parents', '-n', '1', 'HEAD'], { cwd: tmpDir }).stdout.trim();
+        expect(parent.split(' ').length).toBe(1);
     } finally {
-        // Cleanup
         await rm(tmpDir, { recursive: true, force: true });
     }
-}
-
-run();
+}, 60000);

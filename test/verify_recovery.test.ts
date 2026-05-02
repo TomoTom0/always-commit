@@ -2,10 +2,11 @@ import { test, expect } from 'vitest';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { alcomOrThrow, gitInit, shOrThrow } from './helpers';
 
-test('finish works as normal commit without prior saves', async () => {
-    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-test-'));
+test('state file recovery from git history', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-recovery-test-'));
 
     try {
         gitInit(tmpDir);
@@ -14,20 +15,20 @@ test('finish works as normal commit without prior saves', async () => {
         shOrThrow('git', ['commit', '-m', 'Initial commit'], { cwd: tmpDir });
 
         await writeFile(join(tmpDir, 'file1.txt'), 'change 1\n');
+        alcomOrThrow(['save', 'snap 1'], tmpDir);
         await writeFile(join(tmpDir, 'file2.txt'), 'change 2\n');
+        alcomOrThrow(['save', 'snap 2'], tmpDir);
 
-        alcomOrThrow(['finish', 'feat: add new files'], tmpDir);
+        const stateFile = join(tmpDir, '.git', 'always-commit.json');
+        expect(existsSync(stateFile)).toBe(true);
+
+        await rm(stateFile);
+        expect(existsSync(stateFile)).toBe(false);
+
+        alcomOrThrow(['finish', 'Recovered session'], tmpDir);
 
         const log = shOrThrow('git', ['log', '-1', '--pretty=%B'], { cwd: tmpDir }).stdout;
-        expect(log).toContain('feat: add new files');
-
-        const file1 = shOrThrow('git', ['show', 'HEAD:file1.txt'], { cwd: tmpDir }).stdout;
-        const file2 = shOrThrow('git', ['show', 'HEAD:file2.txt'], { cwd: tmpDir }).stdout;
-        expect(file1).toContain('change 1');
-        expect(file2).toContain('change 2');
-
-        const status = shOrThrow('git', ['status', '--porcelain'], { cwd: tmpDir }).stdout;
-        expect(status.trim()).toBe('');
+        expect(log).toContain('Recovered session');
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }

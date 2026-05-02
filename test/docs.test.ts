@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'bun:test';
-import { spawnSync } from 'child_process';
-import path from 'path';
+import { describe, it, expect } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
-const CLI = path.join(import.meta.dir, '..', 'src', 'index.ts');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CLI = path.join(__dirname, '..', 'src', 'index.ts');
+const TSX = path.join(__dirname, '..', 'node_modules', '.bin', 'tsx');
 
 function runDocs(...args: string[]) {
-    return spawnSync('bun', [CLI, 'docs', ...args], { encoding: 'utf-8' });
+    return spawnSync(TSX, [CLI, 'docs', ...args], { encoding: 'utf-8' });
 }
 
 describe('docs command', () => {
