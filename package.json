@@ -38,7 +38,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "vitest run",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "pnpm run build"
   },
   "engines": {
     "node": ">=18"
@@ -54,7 +54,6 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "always-commit": "link:",
     "commander": "^14.0.2",
     "fs-extra": "^11.3.2",
     "simple-git": "^3.30.0"

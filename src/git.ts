@@ -137,54 +137,33 @@ export function isAlcomCommit(message: string): boolean {
     return message.includes('--alcom--');
 }
 
-async function* walkCommitHistory(startHash: string): AsyncGenerator<CommitInfo> {
-    const rawLog = await git.raw([
-        'log',
-        '--pretty=format:%H|%P|%T|%cd|%s',
-        '--date=format:%Y-%m-%d %H:%M:%S',
-        startHash
-    ]);
-
-    if (!rawLog.trim()) return;
-
-    const commits = parseGitLog(rawLog);
-    for (const commit of commits) {
-        yield commit;
+export async function findBaseCommit(): Promise<string> {
+    try {
+        const startHash = await getCurrentHead();
+        const baseHash = await git.raw([
+            'log',
+            '--first-parent',
+            '--fixed-strings',
+            '--grep=--alcom--',
+            '--invert-grep',
+            '-n', '1',
+            '--format=%H',
+            startHash,
+        ]);
+        return baseHash.trim() || EMPTY_TREE;
+    } catch {
+        return EMPTY_TREE;
     }
 }
 
 export async function findLatestAlcomSession(): Promise<CommitInfo[]> {
-    const sessionCommits: CommitInfo[] = [];
-
     try {
-        const startHash = await getCurrentHead();
-
-        for await (const commit of walkCommitHistory(startHash)) {
-            if (!isAlcomCommit(commit.message)) {
-                break;
-            }
-            sessionCommits.push(commit);
-        }
+        const base = await findBaseCommit();
+        const headHash = await getCurrentHead();
+        if (base === headHash) return [];
+        return await getCommits(base, headHash);
     } catch {
         return [];
-    }
-
-    return sessionCommits.reverse();
-}
-
-export async function findBaseCommit(): Promise<string> {
-    try {
-        const startHash = await getCurrentHead();
-
-        for await (const commit of walkCommitHistory(startHash)) {
-            if (!isAlcomCommit(commit.message)) {
-                return commit.hash;
-            }
-        }
-
-        return EMPTY_TREE;
-    } catch {
-        return EMPTY_TREE;
     }
 }
 
