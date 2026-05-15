@@ -46,8 +46,9 @@ function parseAlcomAllow(content: string): boolean | undefined {
         const trimmed = line.trim();
         if (trimmed.startsWith('#') || trimmed === '') continue;
 
-        // Simple parsing: KEY=VALUE
-        const match = trimmed.match(/^ALCOM_ALLOW=(.*)$/);
+        // Handle: KEY=VALUE, KEY = VALUE, export KEY=VALUE, trailing comments
+        const envLine = trimmed.replace(/^export\s+/, '');
+        const match = envLine.match(/^ALCOM_ALLOW\s*=\s*([^#]*)/);
         if (match && match[1] !== undefined) {
             const value = match[1].trim();
             // Remove quotes if present

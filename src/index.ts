@@ -13,15 +13,19 @@ import { version } from '../package.json';
 
 const program = new Command();
 
+function formatLocalDate(d: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 program
     .name('always-commit')
     .description('A tool to manage temporary git snapshots during LLM-assisted coding sessions.')
     .version(version)
     .option('-d, --dry-run', 'Simulate the command without making any changes')
     .hook('preAction', async (thisCommand, actionCommand) => {
-        // Commands that require permission check
-        // If we want to apply to all, we just check.
-        // Assuming global disable for now as per feedback suggestion to centralize.
+        const name = actionCommand.name();
+        if (name === 'help' || name === 'docs' || name === 'version') return;
         if (!await isAllowed()) {
             console.error('Operation disallowed by ALCOM_ALLOW configuration.');
             process.exit(1);
@@ -517,7 +521,7 @@ Example:
   `)
     .action(async (cmdOptions) => {
         try {
-            const limit = parseInt(cmdOptions.number);
+            const limit = parseInt(cmdOptions.number, 10);
             if (isNaN(limit) || limit <= 0) {
                 throw new Error('Invalid number argument. Must be a positive integer.');
             }
@@ -529,11 +533,11 @@ Example:
                 return;
             }
 
-            // Show commits from the current session only
-            const sessionCommits = currentSession.commits.map(c => ({
+            // Show commits from the current session only (newest first)
+            const sessionCommits = [...currentSession.commits].reverse().map(c => ({
                 hash: c.hash,
                 message: c.message,
-                date: new Date(c.timestamp).toISOString().replace('T', ' ').substring(0, 19)
+                date: formatLocalDate(new Date(c.timestamp))
             }));
 
             // Apply limit
