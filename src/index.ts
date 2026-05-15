@@ -1,14 +1,36 @@
-#!/usr/bin/env bun
 import { Command } from 'commander';
+import { spawn } from 'child_process';
+import { readFile, readdir } from 'node:fs/promises';
+import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
 import * as git from './git';
 import * as state from './state';
+import * as session from './session';
+import { isAllowed } from './config';
+import { setup as runSetup } from './setup';
+import { version } from '../package.json';
 
 const program = new Command();
+
+function formatLocalDate(d: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 
 program
     .name('always-commit')
     .description('A tool to manage temporary git snapshots during LLM-assisted coding sessions.')
-    .version('0.0.1')
+    .version(version)
+    .option('-d, --dry-run', 'Simulate the command without making any changes')
+    .hook('preAction', async (thisCommand, actionCommand) => {
+        const name = actionCommand.name();
+        if (name === 'help' || name === 'docs' || actionCommand === thisCommand) return;
+        if (!await isAllowed()) {
+            console.error('Operation disallowed by ALCOM_ALLOW configuration.');
+            process.exit(1);
+        }
+    })
     .addHelpText('after', `
 Examples:
   $ always-commit save "WIP: refactoring"
@@ -20,18 +42,35 @@ program
     .command('save')
     .description('Save a temporary snapshot of the current working directory.')
     .argument('[message]', 'Commit message for the snapshot', 'WIP: snapshot')
+    .option('-f, --force', 'Force commit even if there are no changes')
     .addHelpText('after', `
 Example:
   $ always-commit save "WIP: refactoring user auth"
   `)
-    .action(async (message) => {
+    .action(async (message, cmdOptions) => {
         try {
+
+
+            const globalOptions = program.opts();
+            const options = { ...globalOptions, ...cmdOptions };
             const fullMessage = `--alcom-- ${message}`;
-            const hash = await git.commitAll(fullMessage);
+
+            if (options.dryRun) {
+                console.log(`[Dry Run] Would save snapshot with message: "${fullMessage}"`);
+                return;
+            }
+
+            const hasChanges = await git.hasChanges();
+            if (!hasChanges && !options.force) {
+                console.log(JSON.stringify({ status: 'skipped', message: 'No changes detected' }));
+                return;
+            }
+
+            const hash = await git.commitAll(fullMessage, options.force);
             await state.addCommit(hash, fullMessage);
             console.log(JSON.stringify({ status: 'ok', action: 'save', hash }));
         } catch (error: any) {
-            console.log(JSON.stringify({ status: 'error', message: error.message }));
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });
@@ -46,7 +85,12 @@ Description:
   `)
     .action(async () => {
         try {
-            const lastCommit = await state.popCommit();
+
+
+            const options = program.opts();
+
+            // Peek at the last commit first
+            const lastCommit = await state.getLastCommit();
             if (!lastCommit) {
                 throw new Error('No snapshots to undo');
             }
@@ -56,12 +100,25 @@ Description:
                 throw new Error('HEAD does not match the last snapshot. Manual changes detected?');
             }
 
+            const isRoot = await git.isRootCommit(lastCommit.hash);
+            if (isRoot) {
+                throw new Error('Cannot undo: last commit is a root commit');
+            }
+
             const parentHash = await git.getParentHash(lastCommit.hash);
+
+            if (options.dryRun) {
+                console.log(`[Dry Run] Would undo snapshot ${lastCommit.hash} and reset to ${parentHash}`);
+                return;
+            }
+
+            // Actually pop and reset
+            await state.popCommit();
             await git.resetHard(parentHash);
 
             console.log(JSON.stringify({ status: 'ok', action: 'undo', hash: lastCommit.hash }));
         } catch (error: any) {
-            console.log(JSON.stringify({ status: 'error', message: error.message }));
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });
@@ -70,6 +127,8 @@ program
     .command('finish')
     .description('Squash all temporary snapshots into a single clean commit.')
     .argument('<message>', 'Final commit message')
+    .option('-a, --append', 'Append messages of squashed commits to the final message')
+    .option('--base <hash>', 'Manually specify the base commit hash for recovery')
     .addHelpText('after', `
 Description:
   Resets the branch to the state before the first snapshot (mixed reset),
@@ -78,22 +137,192 @@ Description:
   
 Example:
   $ always-commit finish "feat: implement user login"
+  $ always-commit finish "feat: implement user login" --append
+  $ always-commit finish "restored session" --base a1b2c3d
   `)
-    .action(async (message) => {
+    .action(async (message, cmdOptions) => {
         try {
-            const firstCommit = await state.getFirstCommit();
-            if (!firstCommit) {
-                throw new Error('No snapshots to finish');
+
+
+            const options = program.opts();
+            let baseHash: string | undefined;
+
+            if (cmdOptions.base) {
+                baseHash = cmdOptions.base;
+            } else {
+                baseHash = await git.findBaseCommit();
             }
 
-            const baseHash = await git.getParentHash(firstCommit.hash);
+            if (!baseHash) {
+                // セッションが存在しない場合は、通常のコミットとして動作
+                if (options.dryRun) {
+                    console.log(`[Dry Run] Would commit changes with message: "${message}"`);
+                    return;
+                }
+
+                const finalHash = await git.commitAll(message);
+                console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: finalHash }));
+                return;
+            }
+
+            let finalMessage = message;
+            if (cmdOptions.append) {
+                const commits = await git.getCommits(baseHash);
+                // Filter for alcom commits and extract messages
+                const commitMessages = commits
+                    .filter(c => git.isAlcomCommit(c.message))
+                    .map(c => `- ${c.message.replace('--alcom-- ', '')}`);
+
+                if (commitMessages.length > 0) {
+                    finalMessage += '\n\n' + commitMessages.join('\n');
+                }
+            }
+
+            if (options.dryRun) {
+                console.log(`[Dry Run] Would reset mixed to ${baseHash}, clear state, and commit with message:`);
+                console.log(finalMessage);
+                return;
+            }
+
+            // EMPTY_TREEの場合（リポジトリの全コミットがalcomコミットの場合）
+            // 親なしの新しいルートコミットを作成する
+            if (baseHash === git.EMPTY_TREE) {
+                const treeHash = await git.getTreeHash('HEAD');
+                const newCommit = await git.commitTreeOrphan(treeHash, finalMessage);
+                await git.resetHard(newCommit);
+                await state.clearState();
+                console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: newCommit }));
+                return;
+            }
+
             await git.resetMixed(baseHash);
             await state.clearState();
 
-            const finalHash = await git.commitAll(message);
+            const finalHash = await git.commitAll(finalMessage);
             console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: finalHash }));
         } catch (error: any) {
-            console.log(JSON.stringify({ status: 'error', message: error.message }));
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
+            process.exit(1);
+        }
+    });
+
+program
+    .command('auto-squash')
+    .description('Automatically squash save commits into subsequent manual commits.')
+    .addHelpText('after', `
+Description:
+  Rewrites history to merge 'save' commits into the manual commits that follow them.
+  Commit messages of manual commits are updated to indicate the merge.
+  Trailing 'save' commits (not followed by a manual commit) are preserved but re-parented.
+  
+Example:
+  $ always-commit auto-squash
+  `)
+    .action(async () => {
+        try {
+
+
+            const options = program.opts();
+            const currentSession = await session.getSession();
+            if (!currentSession || currentSession.commits.length === 0) {
+                throw new Error('No active session (no snapshots found)');
+            }
+            const firstCommit = currentSession.commits[0];
+            if (!firstCommit) throw new Error('Invalid session state');
+
+            const isRoot = await git.isRootCommit(firstCommit.hash);
+            if (isRoot) {
+                throw new Error('Cannot auto-squash: session starts from root commit');
+            }
+
+            const baseHash = await git.getParentHash(firstCommit.hash);
+            const commits = await git.getCommits(baseHash);
+
+            if (commits.length === 0) {
+                console.log("No commits to process.");
+                return;
+            }
+
+            // Group commits
+            // We want to group sequences of saves + 1 manual commit.
+            // Or just trailing saves.
+
+            let newHead = baseHash;
+            let pendingSaves: git.CommitInfo[] = [];
+            let actions: string[] = [];
+
+            for (const commit of commits) {
+                const isSave = git.isAlcomCommit(commit.message);
+
+                if (isSave) {
+                    pendingSaves.push(commit);
+                } else {
+                    // Manual commit found. Squash pending saves into this one.
+                    if (pendingSaves.length > 0) {
+                        const squashMsg = `\n\nsquash merged with ${pendingSaves.length} commits by always-commit`;
+                        const newMessage = commit.message + squashMsg;
+
+                        if (options.dryRun) {
+                            actions.push(`Squash ${pendingSaves.length} saves into manual commit ${commit.hash.substring(0, 7)} ("${commit.message}")`);
+                            actions.push(`  New message: "${newMessage.replace(/\n/g, '\\n')}"`);
+                            newHead = commit.hash; // In dry run, we just track logically
+                        } else {
+                            // Create new commit with manual commit's tree, but parent is current newHead
+                            newHead = await git.commitTree(commit.treeHash, newHead, newMessage);
+                        }
+                        pendingSaves = [];
+                    } else {
+                        // Just a manual commit without saves, but we need to re-parent it if history changed
+                        // Actually, if we are rewriting, we must rewrite everything after the first change.
+                        // Since we start from baseHash, we are rewriting everything.
+                        if (options.dryRun) {
+                            actions.push(`Pick manual commit ${commit.hash.substring(0, 7)} ("${commit.message}")`);
+                            newHead = commit.hash;
+                        } else {
+                            newHead = await git.commitTree(commit.treeHash, newHead, commit.message);
+                        }
+                    }
+                }
+            }
+
+            // Handle trailing saves
+            if (pendingSaves.length > 0) {
+                if (options.dryRun) {
+                    actions.push(`Keep ${pendingSaves.length} trailing saves:`);
+                    pendingSaves.forEach(s => actions.push(`  ${s.hash.substring(0, 7)}: ${s.message}`));
+                } else {
+                    for (const save of pendingSaves) {
+                        newHead = await git.commitTree(save.treeHash, newHead, save.message);
+                    }
+                }
+            }
+
+            if (options.dryRun) {
+                console.log("[Dry Run] Auto-squash plan:");
+                actions.forEach(a => console.log(`- ${a}`));
+            } else {
+                // Update branch pointer
+                const currentBranch = await git.getCurrentBranch();
+                await git.updateRef(`refs/heads/${currentBranch}`, newHead);
+
+                // Clear state because we rewrote history, so old hashes in state are invalid.
+                // Actually, should we clear state?
+                // If we squash, the "save" commits are gone or merged.
+                // So yes, the session is effectively "finished" or at least the old state is invalid.
+                // But wait, if there are trailing saves, they are still there, just with new hashes.
+                // If we want to continue the session, we should update the state with new hashes.
+                // But mapping old to new is complex if we squashed some.
+                // For simplicity, let's clear state and assume the user is "cleaning up".
+                // Or, we could just say "session cleared".
+                // The user request didn't specify, but "auto-squash" implies cleaning up.
+                // Let's clear state.
+                await state.clearState();
+
+                console.log(JSON.stringify({ status: 'ok', action: 'auto-squash', newHead }));
+            }
+
+        } catch (error: any) {
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });
@@ -108,14 +337,48 @@ Example:
   `)
     .action(async () => {
         try {
-            const firstCommit = await state.getFirstCommit();
-            if (!firstCommit) {
+            const currentSession = await session.getSession();
+            if (!currentSession || currentSession.commits.length === 0) {
                 throw new Error('No active session (no snapshots found)');
             }
-            const baseHash = await git.getParentHash(firstCommit.hash);
+            const firstCommit = currentSession.commits[0];
+            if (!firstCommit) throw new Error('Invalid session state');
+
+            const isRoot = await git.isRootCommit(firstCommit.hash);
+            const baseHash = isRoot ? git.EMPTY_TREE : await git.getParentHash(firstCommit.hash);
             console.log(baseHash);
         } catch (error: any) {
             console.error(error.message);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('base-update')
+    .description('Update session state by finding consecutive --alcom-- commits from HEAD.')
+    .addHelpText('after', `
+Description:
+  Scans the git history from HEAD's parent backwards, collecting consecutive
+  --alcom-- commits and updates the session state file accordingly.
+  This is useful when the session state becomes corrupted or outdated.
+
+Example:
+  $ always-commit base-update
+  `)
+    .action(async () => {
+        try {
+            const alcomCommits = await git.findLatestAlcomSession();
+
+            if (alcomCommits.length === 0) {
+                await state.clearState();
+                console.log(JSON.stringify({ status: 'ok', action: 'base-update', sessionCommits: 0, message: 'No consecutive --alcom-- commits found from HEAD. Session cleared.' }));
+                return;
+            }
+
+            await state.repairSession(alcomCommits);
+            console.log(JSON.stringify({ status: 'ok', action: 'base-update', sessionCommits: alcomCommits.length, firstCommit: alcomCommits[0]?.hash.substring(0, 7), lastCommit: alcomCommits[alcomCommits.length - 1]?.hash.substring(0, 7) }));
+        } catch (error: any) {
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
         }
     });
@@ -126,6 +389,7 @@ program
     .command('git')
     .description('Run a git command with @base placeholder support.')
     .argument('<args...>', 'Git arguments')
+    .option('--base <hash>', 'Manually specify the base commit hash for @base')
     .allowUnknownOption()
     .addHelpText('after', `
 Description:
@@ -136,25 +400,32 @@ Examples:
   $ always-commit git diff --stat @base
   $ always-commit git log --oneline @base..HEAD
   `)
-    .action(async (args: string[]) => {
+    .action(async (args: string[], cmdOptions) => {
         try {
-            const firstCommit = await state.getFirstCommit();
-            let baseHash = 'HEAD'; // Default if no session, though maybe should error?
 
-            if (firstCommit) {
-                baseHash = await git.getParentHash(firstCommit.hash);
+
+            let baseHash = 'HEAD';
+
+            if (cmdOptions.base) {
+                baseHash = cmdOptions.base;
+            } else {
+                baseHash = await git.findBaseCommit();
             }
 
             const processedArgs = args.map(arg => arg.replace('@base', baseHash));
 
-            const proc = Bun.spawn(['git', ...processedArgs], {
-                stdin: 'inherit',
-                stdout: 'inherit',
-                stderr: 'inherit',
+            const proc = spawn('git', processedArgs, {
+                stdio: 'inherit',
             });
 
-            const exitCode = await proc.exited;
-            process.exit(exitCode);
+            proc.on('error', (err) => {
+                console.error(`Failed to start git: ${err.message}`);
+                process.exit(1);
+            });
+
+            proc.on('close', (exitCode) => {
+                process.exit(exitCode ?? 1);
+            });
         } catch (error: any) {
             console.error(error.message);
             process.exit(1);
@@ -165,32 +436,34 @@ Examples:
 
 program
     .command('status')
-    .description('Show changed files since the session started (alias for `git diff --name-status @base`).')
+    .description('Show changed files since the base commit (first non-alcom commit).')
+    .argument('[args...]', 'Additional git diff arguments')
+    .option('--base <hash>', 'Manually specify the base commit hash')
+    .allowUnknownOption()
     .addHelpText('after', `
 Example:
   $ always-commit status
   M  src/index.ts
   A  docs/new-doc.md
+  $ always-commit status --stat
+  $ always-commit status -- src/
   `)
-    .action(async () => {
-        // Re-use logic or just spawn? Spawning is easier to keep DRY if I extract the runner, but for now just copy-paste or call the action if possible.
-        // Commander actions are functions.
-        // Let's just spawn directly to avoid argument parsing issues.
+    .action(async (args: string[], cmdOptions) => {
         try {
-            const firstCommit = await state.getFirstCommit();
-            if (!firstCommit) {
-                console.log("No active session.");
-                return;
-            }
-            const baseHash = await git.getParentHash(firstCommit.hash);
+            const baseHash = cmdOptions.base || await git.findBaseCommit();
 
-            const proc = Bun.spawn(['git', 'diff', '--name-status', baseHash], {
-                stdin: 'inherit',
-                stdout: 'inherit',
-                stderr: 'inherit',
+            const proc = spawn('git', ['--no-pager', 'diff', '--name-status', baseHash, ...args], {
+                stdio: 'inherit',
             });
-            const exitCode = await proc.exited;
-            process.exit(exitCode);
+
+            proc.on('error', (err) => {
+                console.error(`Failed to start git: ${err.message}`);
+                process.exit(1);
+            });
+
+            proc.on('close', (exitCode) => {
+                process.exit(exitCode ?? 1);
+            });
         } catch (error: any) {
             console.error(error.message);
             process.exit(1);
@@ -199,27 +472,223 @@ Example:
 
 program
     .command('diff')
-    .description('Show changes since the session started (alias for `git diff @base`).')
+    .description('Show changes since the base commit (first non-alcom commit).')
+    .argument('[args...]', 'Additional git diff arguments')
+    .option('--base <hash>', 'Manually specify the base commit hash')
+    .allowUnknownOption()
     .addHelpText('after', `
 Example:
   $ always-commit diff
+  $ always-commit diff --stat
+  $ always-commit diff --name-only
+  $ always-commit diff -- src/
   `)
-    .action(async () => {
+    .action(async (args: string[], cmdOptions) => {
         try {
-            const firstCommit = await state.getFirstCommit();
-            if (!firstCommit) {
-                console.log("No active session.");
+            const baseHash = cmdOptions.base || await git.findBaseCommit();
+
+            const proc = spawn('git', ['--no-pager', 'diff', baseHash, ...args], {
+                stdio: 'inherit',
+            });
+
+            proc.on('error', (err) => {
+                console.error(`Failed to start git: ${err.message}`);
+                process.exit(1);
+            });
+
+            proc.on('close', (exitCode) => {
+                process.exit(exitCode ?? 1);
+            });
+        } catch (error: any) {
+            console.error(error.message);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('log')
+    .description('List commits in the current session.')
+    .option('-n, --number <count>', 'Number of commits to show', '10')
+    .option('-a, --all', 'Show all commits (default: only alcom save commits)')
+    .addHelpText('after', `
+Description:
+  Shows commits from the current active session only.
+  If there is no active session, nothing is displayed.
+
+Example:
+  $ always-commit log
+  $ always-commit log --all
+  `)
+    .action(async (cmdOptions) => {
+        try {
+            const limit = parseInt(cmdOptions.number, 10);
+            if (isNaN(limit) || limit <= 0) {
+                throw new Error('Invalid number argument. Must be a positive integer.');
+            }
+
+            // Get current session
+            const currentSession = await session.getSession();
+            if (!currentSession || currentSession.commits.length === 0) {
+                // No active session, nothing to show
                 return;
             }
-            const baseHash = await git.getParentHash(firstCommit.hash);
 
-            const proc = Bun.spawn(['git', 'diff', baseHash], {
-                stdin: 'inherit',
-                stdout: 'inherit',
-                stderr: 'inherit',
+            // Show commits from the current session only (newest first)
+            const sessionCommits = [...currentSession.commits].reverse().map(c => ({
+                hash: c.hash,
+                message: c.message,
+                date: formatLocalDate(new Date(c.timestamp))
+            }));
+
+            // Apply limit
+            const commitsToShow = sessionCommits.slice(0, Math.min(limit, sessionCommits.length));
+
+            for (const commit of commitsToShow) {
+                const hash = commit.hash.substring(0, 7);
+                const date = commit.date;
+                const msg = commit.message.length > 30 ? commit.message.substring(0, 27) + '...' : commit.message;
+                console.log(`${hash} ${date} ${msg}`);
+            }
+
+        } catch (error: any) {
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
+            process.exit(1);
+        }
+    });
+
+program
+    .command('setup')
+    .description('Configure Claude Code integration by registering hooks in settings.json.')
+    .option('--project', 'Install to project settings (.claude/settings.json) instead of global (~/.claude/settings.json)')
+    .option('--script-dir <dir>', 'Directory to install the hook script', `${os.homedir()}/.local/bin`)
+    .addHelpText('after', `
+Description:
+  Installs the hook script and registers it in Claude Code's settings.json.
+  By default, modifies the global settings (~/.claude/settings.json).
+
+  Registered hooks:
+    UserPromptSubmit  Save a snapshot on every prompt submission
+    PreToolUse        Block git checkout (branch switch only) / git switch when snapshots exist
+
+Examples:
+  $ alcom setup
+  $ alcom setup --project
+  $ alcom setup --script-dir /usr/local/bin
+  $ alcom setup --dry-run
+  `)
+    .action(async (cmdOptions) => {
+        try {
+            const globalOptions = program.opts();
+            const result = await runSetup({
+                project: cmdOptions.project ?? false,
+                scriptDir: cmdOptions.scriptDir,
+                dryRun: globalOptions.dryRun ?? false,
             });
-            const exitCode = await proc.exited;
-            process.exit(exitCode);
+
+            if (globalOptions.dryRun) {
+                console.log('[Dry Run] Setup would make the following changes:');
+                console.log(`  Hook script: ${result.scriptPath}`);
+                console.log(`  Settings file: ${result.settingsPath}`);
+                if (result.userPromptSubmitAdded) console.log('  + UserPromptSubmit hook');
+                if (result.preToolUseAdded) console.log('  + PreToolUse branch guard');
+            } else {
+                console.log('Setup complete.');
+                if (result.scriptInstalled) console.log(`  Hook script installed: ${result.scriptPath}`);
+                if (result.userPromptSubmitAdded) console.log(`  UserPromptSubmit hook added to: ${result.settingsPath}`);
+                if (result.preToolUseAdded) console.log(`  PreToolUse branch guard added to: ${result.settingsPath}`);
+                if (!result.userPromptSubmitAdded && !result.preToolUseAdded) {
+                    console.log('  Hooks already configured. Nothing to change.');
+                }
+            }
+        } catch (error: any) {
+            console.error(error.message);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('docs')
+    .description('Show documentation.')
+    .argument('[topic]', 'Documentation topic (e.g. usage, dev, design)')
+    .argument('[file]', 'Specific file within topic (e.g. agent-integration)')
+    .addHelpText('after', `
+Available topics:
+  usage    User guide and command reference
+  dev      Developer guide and architecture
+  design   Initial design document
+
+Examples:
+  $ alcom docs
+  $ alcom docs usage
+  $ alcom docs usage agent-integration
+  $ alcom docs dev
+  `)
+    .action(async (topic?: string, file?: string) => {
+        try {
+            const __dirname = path.dirname(fileURLToPath(import.meta.url));
+            const docsDir = path.join(__dirname, '..', 'docs');
+
+            if (!topic) {
+                let entries: string[];
+                try {
+                    entries = await readdir(docsDir);
+                } catch {
+                    console.error('Documentation directory not found.');
+                    process.exit(1);
+                }
+                const topics = entries.filter(e => !e.endsWith('.md'));
+                console.log('Available topics:');
+                for (const t of topics) {
+                    const topicDir = path.join(docsDir, t);
+                    let topicFiles: string[];
+                    try {
+                        topicFiles = (await readdir(topicDir)).filter(f => f.endsWith('.md'));
+                    } catch {
+                        continue;
+                    }
+                    if (topicFiles.length === 0) continue;
+                    if (topicFiles.length === 1) {
+                        console.log(`  ${t}`);
+                    } else {
+                        console.log(`  ${t}  (${topicFiles.map(f => f.replace(/\.md$/, '')).join(', ')})`);
+                    }
+                }
+                return;
+            }
+
+            const topicDir = path.join(docsDir, topic);
+            let files: string[];
+            try {
+                files = await readdir(topicDir);
+            } catch {
+                console.error(`Unknown topic: "${topic}". Run 'alcom docs' to see available topics.`);
+                process.exit(1);
+            }
+
+            const mdFiles = files.filter(f => f.endsWith('.md'));
+            if (mdFiles.length === 0) {
+                console.error(`No documentation found for topic: "${topic}"`);
+                process.exit(1);
+            }
+
+            if (file) {
+                const target = file.endsWith('.md') ? file : `${file}.md`;
+                if (!mdFiles.includes(target)) {
+                    console.error(`Unknown file: "${file}". Available: ${mdFiles.map(f => f.replace(/\.md$/, '')).join(', ')}`);
+                    process.exit(1);
+                }
+                const content = await readFile(path.join(topicDir, target), 'utf-8');
+                console.log(content);
+            } else {
+                const filename = mdFiles.includes('index.md') ? 'index.md' : mdFiles[0];
+                const content = await readFile(path.join(topicDir, filename as string), 'utf-8');
+                console.log(content);
+                if (mdFiles.length > 1) {
+                    const others = mdFiles.filter(f => f !== filename);
+                    console.log(`\n--- More in "${topic}": ${others.map(f => f.replace(/\.md$/, '')).join(', ')} ---`);
+                    console.log(`Use: alcom docs ${topic} <file>`);
+                }
+            }
         } catch (error: any) {
             console.error(error.message);
             process.exit(1);

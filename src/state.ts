@@ -1,7 +1,43 @@
 import fs from 'fs-extra';
 import path from 'path';
+import * as git from './git';
 
-export let STATE_FILE = path.join('.git', 'always-commit.json');
+const DEFAULT_STATE_FILE = path.join('.git', 'always-commit.json');
+export let STATE_FILE = DEFAULT_STATE_FILE;
+
+// State file path priorities (relative to git root)
+const STATE_FILE_PRIORITIES = [
+    path.join('.git', 'always-commit.json'),  // Priority 1
+    'always-commit.json',                      // Priority 2
+    '.always-commit.json'                      // Priority 3
+];
+
+export async function getStatePath(): Promise<string> {
+    // If a custom state file has been set (e.g., for testing), use it as-is
+    if (STATE_FILE !== DEFAULT_STATE_FILE) {
+        return STATE_FILE;
+    }
+
+    // For the default state file, resolve it relative to git root
+    if (path.isAbsolute(STATE_FILE)) return STATE_FILE;
+    try {
+        const root = await git.getGitRoot();
+
+        // Check paths in priority order
+        for (const relativePath of STATE_FILE_PRIORITIES) {
+            const fullPath = path.join(root, relativePath);
+            if (await fs.pathExists(fullPath)) {
+                return fullPath;
+            }
+        }
+
+        // Return default path (lowest priority)
+        return path.join(root, STATE_FILE_PRIORITIES[STATE_FILE_PRIORITIES.length - 1]);
+    } catch {
+        // Fallback for when git root can't be found (e.g. not in a repo)
+        return STATE_FILE;
+    }
+}
 
 export function setStateFile(path: string) {
     STATE_FILE = path;
@@ -22,14 +58,34 @@ const defaultState: State = {
 };
 
 export async function loadState(): Promise<State> {
-    if (await fs.pathExists(STATE_FILE)) {
-        return fs.readJson(STATE_FILE);
+    const statePath = await getStatePath();
+    if (await fs.pathExists(statePath)) {
+        return fs.readJson(statePath);
     }
     return { commits: [] };
 }
 
 export async function saveState(state: State): Promise<void> {
-    await fs.writeJson(STATE_FILE, state, { spaces: 2 });
+    // If a custom state file has been set, use it directly
+    if (STATE_FILE !== DEFAULT_STATE_FILE) {
+        await fs.writeJson(STATE_FILE, state, { spaces: 2 });
+        return;
+    }
+
+    const root = await git.getGitRoot();
+
+    // Try paths in priority order
+    for (const relativePath of STATE_FILE_PRIORITIES) {
+        const statePath = path.join(root, relativePath);
+        try {
+            await fs.writeJson(statePath, state, { spaces: 2 });
+            return;
+        } catch {
+            // Try next path
+        }
+    }
+
+    throw new Error('Failed to save state file');
 }
 
 export async function addCommit(hash: string, message: string): Promise<void> {
@@ -52,7 +108,8 @@ export async function popCommit(): Promise<Commit | undefined> {
 }
 
 export async function clearState(): Promise<void> {
-    await fs.remove(STATE_FILE);
+    const statePath = await getStatePath();
+    await fs.remove(statePath);
 }
 
 export async function getLastCommit(): Promise<Commit | undefined> {
@@ -63,4 +120,15 @@ export async function getLastCommit(): Promise<Commit | undefined> {
 export async function getFirstCommit(): Promise<Commit | undefined> {
     const state = await loadState();
     return state.commits[0];
+}
+
+export async function repairSession(commits: { hash: string; message: string; date: string }[]): Promise<void> {
+    const state: State = {
+        commits: commits.map(c => ({
+            hash: c.hash,
+            message: c.message,
+            timestamp: new Date(c.date).getTime()
+        }))
+    };
+    await saveState(state);
 }

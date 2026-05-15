@@ -1,16 +1,54 @@
 {
   "name": "always-commit",
-  "module": "index.ts",
+  "version": "1.1.1",
+  "description": "LLM-assisted coding session snapshot management tool - automatic temporary commits during sessions",
   "type": "module",
-  "private": true,
+  "license": "MIT",
+  "author": "TomoTom0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TomoTom0/always-commit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TomoTom0/always-commit/issues"
+  },
+  "homepage": "https://github.com/TomoTom0/always-commit#readme",
+  "keywords": [
+    "git",
+    "commit",
+    "snapshot",
+    "llm",
+    "ai",
+    "coding",
+    "session",
+    "cli"
+  ],
   "bin": {
-    "always-commit": "src/index.ts",
-    "alcom": "src/index.ts"
+    "always-commit": "dist/index.js",
+    "alcom": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "docs",
+    "LICENSE",
+    "README.md",
+    "THIRD_PARTY_LICENSES.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
-    "@types/bun": "latest",
     "@types/fs-extra": "^11.0.4",
-    "@types/node": "^24.10.1"
+    "@types/node": "^24.10.1",
+    "esbuild": "^0.28.0",
+    "tsx": "^4.21.0",
+    "vitest": "^4.1.5"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -19,5 +57,10 @@
     "commander": "^14.0.2",
     "fs-extra": "^11.3.2",
     "simple-git": "^3.30.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }
