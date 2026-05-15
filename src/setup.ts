@@ -3,6 +3,7 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 import { readFile, writeFile, mkdir, copyFile, access, chmod } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import * as git from './git';
 
 export interface SetupOptions {
     project: boolean;
@@ -60,7 +61,7 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
 
     const settingsPath = options.settingsPathOverride ?? (
         options.project
-            ? path.join(process.cwd(), '.claude', 'settings.json')
+            ? path.join(await git.getGitRoot(), '.claude', 'settings.json')
             : path.join(os.homedir(), '.claude', 'settings.json')
     );
 
