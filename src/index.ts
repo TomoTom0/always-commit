@@ -25,7 +25,7 @@ program
     .option('-d, --dry-run', 'Simulate the command without making any changes')
     .hook('preAction', async (thisCommand, actionCommand) => {
         const name = actionCommand.name();
-        if (name === 'help' || name === 'docs' || name === 'version') return;
+        if (name === 'help' || name === 'docs' || actionCommand === thisCommand) return;
         if (!await isAllowed()) {
             console.error('Operation disallowed by ALCOM_ALLOW configuration.');
             process.exit(1);
