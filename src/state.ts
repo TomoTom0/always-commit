@@ -159,7 +159,8 @@ export async function repairSession(commits: { hash: string; message: string; da
             hash: c.hash,
             message: c.message,
             timestamp: new Date(c.date).getTime()
-        }))
+        })),
+        undoStack: [],
     };
     await saveState(state);
 }

@@ -125,3 +125,33 @@ test('save after undo clears redo stack', async () => {
         await rm(tmpDir, { recursive: true, force: true });
     }
 });
+
+test('redo error when uncommitted changes exist', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-redo-dirty-'));
+
+    try {
+        gitInit(tmpDir);
+
+        await writeFile(join(tmpDir, 'base.txt'), 'base\n');
+        shOrThrow('git', ['add', 'base.txt'], { cwd: tmpDir });
+        shOrThrow('git', ['commit', '-m', 'chore: base commit'], { cwd: tmpDir });
+
+        await writeFile(join(tmpDir, 'work.txt'), 'work\n');
+        alcomOrThrow(['save', 'WIP: snapshot'], tmpDir);
+
+        // Undo
+        alcomOrThrow(['undo'], tmpDir);
+
+        // Create uncommitted changes before redo
+        await writeFile(join(tmpDir, 'dirty.txt'), 'dirty\n');
+        shOrThrow('git', ['add', 'dirty.txt'], { cwd: tmpDir });
+
+        const result = alcom(['redo'], tmpDir);
+        expect(result.code).not.toBe(0);
+        const err = JSON.parse(result.stderr);
+        expect(err.status).toBe('error');
+        expect(err.message).toContain('Uncommitted changes');
+    } finally {
+        await rm(tmpDir, { recursive: true, force: true });
+    }
+});

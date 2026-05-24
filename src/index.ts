@@ -107,14 +107,19 @@ Description:
 
             const parentHash = await git.getParentHash(lastCommit.hash);
 
+            const hasWorkingChanges = await git.hasChanges();
+            if (hasWorkingChanges) {
+                throw new Error('Uncommitted changes detected. Commit or stash them before undo.');
+            }
+
             if (options.dryRun) {
                 console.log(`[Dry Run] Would undo snapshot ${lastCommit.hash} and reset to ${parentHash}`);
                 return;
             }
 
-            // Actually pop and reset
-            await state.popCommit();
+            // Git operation first, then state update
             await git.resetHard(parentHash);
+            await state.popCommit();
 
             const snapshotMessage = lastCommit.message.replace('--alcom-- ', '');
             const diffFiles = await git.getDiffNameStatus(parentHash, lastCommit.hash);
@@ -148,6 +153,11 @@ Description:
             const undoneCommit = await state.peekUndoStack();
             if (!undoneCommit) {
                 throw new Error('Nothing to redo. No undone snapshots found.');
+            }
+
+            const hasWorkingChanges = await git.hasChanges();
+            if (hasWorkingChanges) {
+                throw new Error('Uncommitted changes detected. Commit or stash them before redo.');
             }
 
             if (options.dryRun) {
