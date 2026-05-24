@@ -118,6 +118,11 @@ export async function pushCommit(commit: Commit): Promise<void> {
     await saveState(state);
 }
 
+export async function peekUndoStack(): Promise<Commit | undefined> {
+    const state = await loadState();
+    return state.undoStack[state.undoStack.length - 1];
+}
+
 export async function popUndoStack(): Promise<Commit | undefined> {
     const state = await loadState();
     const commit = state.undoStack.pop();

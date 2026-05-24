@@ -145,7 +145,7 @@ Description:
         try {
             const options = program.opts();
 
-            const undoneCommit = await state.popUndoStack();
+            const undoneCommit = await state.peekUndoStack();
             if (!undoneCommit) {
                 throw new Error('Nothing to redo. No undone snapshots found.');
             }
@@ -156,6 +156,7 @@ Description:
             }
 
             await git.resetHard(undoneCommit.hash);
+            await state.popUndoStack();
             await state.pushCommit(undoneCommit);
 
             const snapshotMessage = undoneCommit.message.replace('--alcom-- ', '');
