@@ -167,6 +167,11 @@ export async function findLatestAlcomSession(): Promise<CommitInfo[]> {
     }
 }
 
+export async function getDiffNameStatus(from: string, to: string): Promise<string[]> {
+    const result = await git.raw(['diff', '--name-status', from, to]);
+    return result.trim().split('\n').filter(Boolean);
+}
+
 export async function isAncestor(ancestor: string, descendant: string = 'HEAD'): Promise<boolean> {
     return new Promise((resolve, reject) => {
         const proc = spawn('git', ['merge-base', '--is-ancestor', ancestor, descendant], {

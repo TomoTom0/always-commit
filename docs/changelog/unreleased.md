@@ -2,7 +2,7 @@
 
 ## New Features
 
-（変更内容をここに記載）
+- redoコマンドの実装: undoで取り消したスナップショットを1つ復元 (TASK-28)
 
 ## Bug Fixes
 
@@ -10,7 +10,8 @@
 
 ## Changes
 
-（変更内容をここに記載）
+- undoコマンドの出力に取り消したスナップショットのメッセージ、リセットされたファイル一覧、redoによる復元案内を追加 (TASK-27)
+- checkout hookメッセージをfinish優先からundo優先フローに変更 (TASK-29)
 
 ## Performance
 
