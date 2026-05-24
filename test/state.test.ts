@@ -21,7 +21,7 @@ describe('State Management', () => {
     });
 
     it('should save and load state', async () => {
-        const s = { commits: [{ hash: 'abc', message: 'test', timestamp: 123 }] };
+        const s = { commits: [{ hash: 'abc', message: 'test', timestamp: 123 }], undoStack: [] };
         await state.saveState(s);
         const loaded = await state.loadState();
         expect(loaded).toEqual(s);

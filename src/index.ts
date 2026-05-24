@@ -116,7 +116,56 @@ Description:
             await state.popCommit();
             await git.resetHard(parentHash);
 
-            console.log(JSON.stringify({ status: 'ok', action: 'undo', hash: lastCommit.hash }));
+            const snapshotMessage = lastCommit.message.replace('--alcom-- ', '');
+            const diffFiles = await git.getDiffNameStatus(parentHash, lastCommit.hash);
+            console.log(JSON.stringify({
+                status: 'ok',
+                action: 'undo',
+                hash: lastCommit.hash,
+                undoneMessage: snapshotMessage,
+                revertedFiles: diffFiles,
+                hint: 'Use \'alcom redo\' to restore this snapshot.',
+            }));
+        } catch (error: any) {
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
+            process.exit(1);
+        }
+    });
+
+program
+    .command('redo')
+    .description('Restore the last undone snapshot.')
+    .addHelpText('after', `
+Description:
+  Restores the most recent snapshot that was undone by 'undo'.
+  Consecutive redo is supported as long as there are undone snapshots.
+  Running redo when nothing has been undone results in an error.
+  `)
+    .action(async () => {
+        try {
+            const options = program.opts();
+
+            const undoneCommit = await state.peekUndoStack();
+            if (!undoneCommit) {
+                throw new Error('Nothing to redo. No undone snapshots found.');
+            }
+
+            if (options.dryRun) {
+                console.log(`[Dry Run] Would redo snapshot ${undoneCommit.hash}`);
+                return;
+            }
+
+            await git.resetHard(undoneCommit.hash);
+            await state.popUndoStack();
+            await state.pushCommit(undoneCommit);
+
+            const snapshotMessage = undoneCommit.message.replace('--alcom-- ', '');
+            console.log(JSON.stringify({
+                status: 'ok',
+                action: 'redo',
+                hash: undoneCommit.hash,
+                restoredMessage: snapshotMessage,
+            }));
         } catch (error: any) {
             console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);

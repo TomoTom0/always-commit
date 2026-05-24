@@ -86,7 +86,7 @@ chmod +x ~/.local/bin/alcom-save.sh
         "hooks": [
           {
             "type": "command",
-            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE 'git checkout(\\s+-[bB]|\\s+[^\\s-]|\\s*$)' || echo \"$cmd\" | grep -qE 'git switch'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了コミットがあります。先にalcom finishを実行してください。なお、alcom finishを実行するとスナップショットコミットが1つにまとめられ消滅します。切り替え後に必要な作業が残っていないか（未反映の変更、別ブランチへの移植が必要な修正など）を確認してからfinishしてください。\"}}'; fi; fi"
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE 'git checkout(\\s+-[bB]|\\s+[^\\s-]|\\s*$)' || echo \"$cmd\" | grep -qE 'git switch'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了コミットがあります。alcom logで内容を確認し、不要なスナップショットだけalcom undoで取り消し、残りをalcom finishでまとめてください。undoしすぎた場合はalcom redoで戻せます。\"}}'; fi; fi"
           }
         ]
       }
@@ -133,10 +133,13 @@ alcom diff
 # 3. 直前のスナップショットに戻したい場合
 alcom undo
 
-# 4. セッション完了: 全スナップショットを1コミットにまとめる
+# 4. undoしすぎた場合はredoで戻せる
+alcom redo
+
+# 5. セッション完了: 全スナップショットを1コミットにまとめる
 alcom finish "feat: ユーザー認証の実装"
 
-# 5. git log はクリーンな状態になる
+# 6. git log はクリーンな状態になる
 git log --oneline
 ```
 
@@ -148,4 +151,5 @@ git log --oneline
 | `alcom diff` | セッション開始以降の差分 |
 | `alcom log` | 現在のセッションのスナップショット一覧 |
 | `alcom undo` | 直前のスナップショットを取り消す |
+| `alcom redo` | undoで取り消したスナップショットを復元する |
 | `alcom finish "<message>"` | 全スナップショットを1コミットにまとめる |
