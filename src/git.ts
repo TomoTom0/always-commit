@@ -201,15 +201,16 @@ export async function getDiffStat(): Promise<DiffEntry[]> {
     // Untracked files won't appear in diff; read their line counts.
     const gitRoot = await getGitRoot();
     const untrackedFiles = [...status.not_added, ...status.created].filter(f => !entries.has(f));
-    for (const f of untrackedFiles) {
+    await Promise.all(untrackedFiles.map(async (f) => {
         let added = 0;
         try {
             const content = await readFile(join(gitRoot, f), 'utf-8');
-            added = content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
-            if (added < 0) added = 0;
+            if (content.length > 0) {
+                added = content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
+            }
         } catch { /* binary or unreadable — leave as 0 */ }
         entries.set(f, { path: f, added, deleted: 0 });
-    }
+    }));
 
     return Array.from(entries.values());
 }
