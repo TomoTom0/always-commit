@@ -107,14 +107,14 @@ Description:
 
             const parentHash = await git.getParentHash(lastCommit.hash);
 
-            const hasWorkingChanges = await git.hasChanges();
-            if (hasWorkingChanges) {
-                throw new Error('Uncommitted changes detected. Commit or stash them before undo.');
-            }
-
             if (options.dryRun) {
                 console.log(`[Dry Run] Would undo snapshot ${lastCommit.hash} and reset to ${parentHash}`);
                 return;
+            }
+
+            const hasWorkingChanges = await git.hasChanges();
+            if (hasWorkingChanges) {
+                throw new Error('Uncommitted changes detected. Commit or stash them before undo.');
             }
 
             // Git operation first, then state update
@@ -155,14 +155,14 @@ Description:
                 throw new Error('Nothing to redo. No undone snapshots found.');
             }
 
-            const hasWorkingChanges = await git.hasChanges();
-            if (hasWorkingChanges) {
-                throw new Error('Uncommitted changes detected. Commit or stash them before redo.');
-            }
-
             if (options.dryRun) {
                 console.log(`[Dry Run] Would redo snapshot ${undoneCommit.hash}`);
                 return;
+            }
+
+            const hasWorkingChanges = await git.hasChanges();
+            if (hasWorkingChanges) {
+                throw new Error('Uncommitted changes detected. Commit or stash them before redo.');
             }
 
             await git.resetHard(undoneCommit.hash);
