@@ -177,27 +177,22 @@ export async function getDiffStat(): Promise<DiffEntry[]> {
     const status = await git.status();
     if (status.files.length === 0) return [];
 
-    // git diff --numstat HEAD captures all changes (working tree + index vs HEAD),
-    // but only for tracked files. We need to also handle untracked files.
-    const [trackedDiff, cachedDiff] = await Promise.all([
-        git.raw(['diff', '--numstat', 'HEAD']),
-        git.raw(['diff', '--cached', '--numstat', 'HEAD']),
-    ]);
+    // Use EMPTY_TREE when HEAD does not exist (e.g., before the first commit).
+    const hasHead = await git.revparse(['HEAD']).then(() => true).catch(() => false);
+    const rawDiff = await git.raw(['diff', '--numstat', hasHead ? 'HEAD' : EMPTY_TREE]);
 
     const entries = new Map<string, DiffEntry>();
 
-    for (const raw of [trackedDiff, cachedDiff]) {
-        for (const line of raw.trim().split('\n').filter(Boolean)) {
-            const [addStr, delStr, filePath] = line.split('\t');
-            const added = addStr === '-' ? 0 : parseInt(addStr, 10);
-            const deleted = delStr === '-' ? 0 : parseInt(delStr, 10);
-            const existing = entries.get(filePath);
-            if (existing) {
-                existing.added += added;
-                existing.deleted += deleted;
-            } else {
-                entries.set(filePath, { path: filePath, added, deleted });
-            }
+    for (const line of rawDiff.trim().split('\n').filter(Boolean)) {
+        const [addStr, delStr, filePath] = line.split('\t');
+        const added = addStr === '-' ? 0 : parseInt(addStr, 10);
+        const deleted = delStr === '-' ? 0 : parseInt(delStr, 10);
+        const existing = entries.get(filePath);
+        if (existing) {
+            existing.added += added;
+            existing.deleted += deleted;
+        } else {
+            entries.set(filePath, { path: filePath, added, deleted });
         }
     }
 
