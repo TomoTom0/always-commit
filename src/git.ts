@@ -1,5 +1,7 @@
 import simpleGit, { type SimpleGit } from 'simple-git';
 import { spawn } from 'child_process';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const git: SimpleGit = simpleGit();
 
@@ -196,17 +198,17 @@ export async function getDiffStat(): Promise<DiffEntry[]> {
         }
     }
 
-    // Untracked files won't appear in diff; add them from status with 0 counts.
-    // After git add they'll show in cached diff, but some may only be in working tree.
-    for (const f of status.not_added) {
-        if (!entries.has(f)) {
-            entries.set(f, { path: f, added: 0, deleted: 0 });
-        }
-    }
-    for (const f of status.created) {
-        if (!entries.has(f)) {
-            entries.set(f, { path: f, added: 0, deleted: 0 });
-        }
+    // Untracked files won't appear in diff; read their line counts.
+    const gitRoot = await getGitRoot();
+    const untrackedFiles = [...status.not_added, ...status.created].filter(f => !entries.has(f));
+    for (const f of untrackedFiles) {
+        let added = 0;
+        try {
+            const content = await readFile(join(gitRoot, f), 'utf-8');
+            added = content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
+            if (added < 0) added = 0;
+        } catch { /* binary or unreadable — leave as 0 */ }
+        entries.set(f, { path: f, added, deleted: 0 });
     }
 
     return Array.from(entries.values());
