@@ -51,18 +51,21 @@ export interface Commit {
 
 export interface State {
     commits: Commit[];
+    undoStack: Commit[];
 }
 
 const defaultState: State = {
     commits: [],
+    undoStack: [],
 };
 
 export async function loadState(): Promise<State> {
     const statePath = await getStatePath();
     if (await fs.pathExists(statePath)) {
-        return fs.readJson(statePath);
+        const raw = await fs.readJson(statePath);
+        return { commits: raw.commits ?? [], undoStack: raw.undoStack ?? [] };
     }
-    return { commits: [] };
+    return { commits: [], undoStack: [] };
 }
 
 export async function saveState(state: State): Promise<void> {
@@ -95,6 +98,7 @@ export async function addCommit(hash: string, message: string): Promise<void> {
         message,
         timestamp: Date.now(),
     });
+    state.undoStack = [];
     await saveState(state);
 }
 
@@ -102,9 +106,36 @@ export async function popCommit(): Promise<Commit | undefined> {
     const state = await loadState();
     const commit = state.commits.pop();
     if (commit) {
+        state.undoStack.push(commit);
         await saveState(state);
     }
     return commit;
+}
+
+export async function pushCommit(commit: Commit): Promise<void> {
+    const state = await loadState();
+    state.commits.push(commit);
+    await saveState(state);
+}
+
+export async function peekUndoStack(): Promise<Commit | undefined> {
+    const state = await loadState();
+    return state.undoStack[state.undoStack.length - 1];
+}
+
+export async function popUndoStack(): Promise<Commit | undefined> {
+    const state = await loadState();
+    const commit = state.undoStack.pop();
+    if (commit) {
+        await saveState(state);
+    }
+    return commit;
+}
+
+export async function clearUndoStack(): Promise<void> {
+    const state = await loadState();
+    state.undoStack = [];
+    await saveState(state);
 }
 
 export async function clearState(): Promise<void> {
@@ -128,7 +159,8 @@ export async function repairSession(commits: { hash: string; message: string; da
             hash: c.hash,
             message: c.message,
             timestamp: new Date(c.date).getTime()
-        }))
+        })),
+        undoStack: [],
     };
     await saveState(state);
 }

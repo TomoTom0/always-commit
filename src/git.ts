@@ -1,5 +1,7 @@
 import simpleGit, { type SimpleGit } from 'simple-git';
 import { spawn } from 'child_process';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const git: SimpleGit = simpleGit();
 
@@ -165,6 +167,57 @@ export async function findLatestAlcomSession(): Promise<CommitInfo[]> {
     } catch {
         return [];
     }
+}
+
+export interface DiffEntry {
+    path: string;
+    added: number;
+    deleted: number;
+}
+
+export async function getDiffStat(): Promise<DiffEntry[]> {
+    const status = await git.status();
+    if (status.files.length === 0) return [];
+
+    // Use EMPTY_TREE when HEAD does not exist (e.g., before the first commit).
+    const hasHead = await git.revparse(['HEAD']).then(() => true).catch(() => false);
+    const rawDiff = await git.raw(['diff', '--numstat', hasHead ? 'HEAD' : EMPTY_TREE]);
+
+    const entries = new Map<string, DiffEntry>();
+
+    for (const line of rawDiff.trim().split('\n').filter(Boolean)) {
+        const [addStr, delStr, filePath] = line.split('\t');
+        const added = addStr === '-' ? 0 : parseInt(addStr, 10);
+        const deleted = delStr === '-' ? 0 : parseInt(delStr, 10);
+        const existing = entries.get(filePath);
+        if (existing) {
+            existing.added += added;
+            existing.deleted += deleted;
+        } else {
+            entries.set(filePath, { path: filePath, added, deleted });
+        }
+    }
+
+    // Untracked files won't appear in diff; read their line counts.
+    const gitRoot = await getGitRoot();
+    const untrackedFiles = [...status.not_added, ...status.created].filter(f => !entries.has(f));
+    await Promise.all(untrackedFiles.map(async (f) => {
+        let added = 0;
+        try {
+            const content = await readFile(join(gitRoot, f), 'utf-8');
+            if (content.length > 0) {
+                added = content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
+            }
+        } catch { /* binary or unreadable — leave as 0 */ }
+        entries.set(f, { path: f, added, deleted: 0 });
+    }));
+
+    return Array.from(entries.values());
+}
+
+export async function getDiffNameStatus(from: string, to: string): Promise<string[]> {
+    const result = await git.raw(['diff', '--name-status', from, to]);
+    return result.trim().split('\n').filter(Boolean);
 }
 
 export async function isAncestor(ancestor: string, descendant: string = 'HEAD'): Promise<boolean> {

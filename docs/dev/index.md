@@ -26,18 +26,24 @@ interface State {
     message: string;   // コミットメッセージ
     timestamp: number; // タイムスタンプ
   }[];
+  undoStack: {
+    hash: string;
+    message: string;
+    timestamp: number;
+  }[];
 }
 ```
 
 ## テスト
 
-テストには `bun:test` を使用しています。
+テストには `vitest` を使用しています。
 
 ```bash
-bun test
+pnpm test
 ```
 
 ## 開発
 
-1.  依存関係のインストール: `bun install`
-2.  ツールの実行: `bun run src/index.ts`
+1.  依存関係のインストール: `pnpm install`
+2.  ビルド: `pnpm run build`
+3.  テスト: `pnpm test`

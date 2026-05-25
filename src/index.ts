@@ -38,14 +38,30 @@ Examples:
   $ always-commit finish "feat: complete refactoring"
   `);
 
+function generateAutoMessage(): string {
+    return formatLocalDate(new Date());
+}
+
+function summarizeDiffStat(entries: git.DiffEntry[]): string {
+    if (entries.length === 0) return '';
+    const sorted = [...entries].sort((a, b) =>
+        (b.added + b.deleted) - (a.added + a.deleted)
+    );
+    const parts = sorted.map(e => `${e.path} (+${e.added}/-${e.deleted})`);
+    const result = parts.join(', ');
+    return result.length > 120 ? result.slice(0, 117) + '...' : result;
+}
+
 program
     .command('save')
     .description('Save a temporary snapshot of the current working directory.')
     .argument('[message]', 'Commit message for the snapshot', 'WIP: snapshot')
     .option('-f, --force', 'Force commit even if there are no changes')
+    .option('--auto', 'Auto-generate message from diff stat')
     .addHelpText('after', `
 Example:
   $ always-commit save "WIP: refactoring user auth"
+  $ always-commit save --auto
   `)
     .action(async (message, cmdOptions) => {
         try {
@@ -53,7 +69,17 @@ Example:
 
             const globalOptions = program.opts();
             const options = { ...globalOptions, ...cmdOptions };
-            const fullMessage = `--alcom-- ${message}`;
+
+            let commitMessage = message;
+            if (options.auto) {
+                const entries = await git.getDiffStat();
+                if (entries.length > 0) {
+                    commitMessage = summarizeDiffStat(entries);
+                } else {
+                    commitMessage = generateAutoMessage();
+                }
+            }
+            const fullMessage = `--alcom-- ${commitMessage}`;
 
             if (options.dryRun) {
                 console.log(`[Dry Run] Would save snapshot with message: "${fullMessage}"`);
@@ -112,11 +138,70 @@ Description:
                 return;
             }
 
-            // Actually pop and reset
-            await state.popCommit();
-            await git.resetHard(parentHash);
+            const hasWorkingChanges = await git.hasChanges();
+            if (hasWorkingChanges) {
+                throw new Error('Uncommitted changes detected. Commit or stash them before undo.');
+            }
 
-            console.log(JSON.stringify({ status: 'ok', action: 'undo', hash: lastCommit.hash }));
+            // Git operation first, then state update
+            await git.resetHard(parentHash);
+            await state.popCommit();
+
+            const snapshotMessage = lastCommit.message.replace('--alcom-- ', '');
+            const diffFiles = await git.getDiffNameStatus(parentHash, lastCommit.hash);
+            console.log(JSON.stringify({
+                status: 'ok',
+                action: 'undo',
+                hash: lastCommit.hash,
+                undoneMessage: snapshotMessage,
+                revertedFiles: diffFiles,
+                hint: 'Use \'alcom redo\' to restore this snapshot.',
+            }));
+        } catch (error: any) {
+            console.error(JSON.stringify({ status: 'error', message: error.message }));
+            process.exit(1);
+        }
+    });
+
+program
+    .command('redo')
+    .description('Restore the last undone snapshot.')
+    .addHelpText('after', `
+Description:
+  Restores the most recent snapshot that was undone by 'undo'.
+  Consecutive redo is supported as long as there are undone snapshots.
+  Running redo when nothing has been undone results in an error.
+  `)
+    .action(async () => {
+        try {
+            const options = program.opts();
+
+            const undoneCommit = await state.peekUndoStack();
+            if (!undoneCommit) {
+                throw new Error('Nothing to redo. No undone snapshots found.');
+            }
+
+            if (options.dryRun) {
+                console.log(`[Dry Run] Would redo snapshot ${undoneCommit.hash}`);
+                return;
+            }
+
+            const hasWorkingChanges = await git.hasChanges();
+            if (hasWorkingChanges) {
+                throw new Error('Uncommitted changes detected. Commit or stash them before redo.');
+            }
+
+            await git.resetHard(undoneCommit.hash);
+            await state.popUndoStack();
+            await state.pushCommit(undoneCommit);
+
+            const snapshotMessage = undoneCommit.message.replace('--alcom-- ', '');
+            console.log(JSON.stringify({
+                status: 'ok',
+                action: 'redo',
+                hash: undoneCommit.hash,
+                restoredMessage: snapshotMessage,
+            }));
         } catch (error: any) {
             console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
