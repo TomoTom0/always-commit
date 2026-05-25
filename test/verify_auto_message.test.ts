@@ -26,9 +26,9 @@ test('save --auto generates message with diff amounts', async () => {
         const logResult = shOrThrow('git', ['log', '-1', '--format=%s'], { cwd: tmpDir });
         const msg = logResult.stdout.trim();
         expect(msg).toContain('--alcom--');
-        // Should contain file with change amounts format
-        expect(msg).toMatch(/foo\.ts \(\+\d+\/-\d+\)/);
-        expect(msg).toMatch(/bar\.ts \(\+\d+\/-\d+\)/);
+        // Untracked files should show actual line counts, not +0/-0
+        expect(msg).toMatch(/foo\.ts \(\+1\/-0\)/);
+        expect(msg).toMatch(/bar\.ts \(\+1\/-0\)/);
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
@@ -55,6 +55,10 @@ test('save --auto sorts files by change amount descending', async () => {
 
         const logResult = shOrThrow('git', ['log', '-1', '--format=%s'], { cwd: tmpDir });
         const msg = logResult.stdout.trim();
+        // Untracked files should show actual line counts
+        expect(msg).toMatch(/large\.ts \(\+20\/-0\)/);
+        expect(msg).toMatch(/small\.ts \(\+1\/-0\)/);
+
         // large.ts should appear before small.ts (more changes)
         const largeIdx = msg.indexOf('large.ts');
         const smallIdx = msg.indexOf('small.ts');
