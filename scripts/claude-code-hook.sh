@@ -16,7 +16,6 @@ if ! command -v alcom &>/dev/null; then
     exit 0
 fi
 
-message=$(date "+%y%m%d-%H%M%S")
-
-# Save snapshot (silently - errors must not block the user prompt)
-alcom save "$message" >/dev/null 2>&1 || true
+# Save snapshot with auto-generated message from diff stat
+# (silently - errors must not block the user prompt)
+alcom save --auto >/dev/null 2>&1 || true

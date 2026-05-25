@@ -167,6 +167,51 @@ export async function findLatestAlcomSession(): Promise<CommitInfo[]> {
     }
 }
 
+export interface DiffEntry {
+    path: string;
+    added: number;
+    deleted: number;
+}
+
+export async function getDiffStat(): Promise<DiffEntry[]> {
+    const status = await git.status();
+    if (status.files.length === 0) return [];
+
+    // Use EMPTY_TREE when HEAD does not exist (e.g., before the first commit).
+    const hasHead = await git.revparse(['HEAD']).then(() => true).catch(() => false);
+    const rawDiff = await git.raw(['diff', '--numstat', hasHead ? 'HEAD' : EMPTY_TREE]);
+
+    const entries = new Map<string, DiffEntry>();
+
+    for (const line of rawDiff.trim().split('\n').filter(Boolean)) {
+        const [addStr, delStr, filePath] = line.split('\t');
+        const added = addStr === '-' ? 0 : parseInt(addStr, 10);
+        const deleted = delStr === '-' ? 0 : parseInt(delStr, 10);
+        const existing = entries.get(filePath);
+        if (existing) {
+            existing.added += added;
+            existing.deleted += deleted;
+        } else {
+            entries.set(filePath, { path: filePath, added, deleted });
+        }
+    }
+
+    // Untracked files won't appear in diff; add them from status with 0 counts.
+    // After git add they'll show in cached diff, but some may only be in working tree.
+    for (const f of status.not_added) {
+        if (!entries.has(f)) {
+            entries.set(f, { path: f, added: 0, deleted: 0 });
+        }
+    }
+    for (const f of status.created) {
+        if (!entries.has(f)) {
+            entries.set(f, { path: f, added: 0, deleted: 0 });
+        }
+    }
+
+    return Array.from(entries.values());
+}
+
 export async function getDiffNameStatus(from: string, to: string): Promise<string[]> {
     const result = await git.raw(['diff', '--name-status', from, to]);
     return result.trim().split('\n').filter(Boolean);

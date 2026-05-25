@@ -38,6 +38,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "vitest run",
+    "install:global": "pnpm run build && npm install -g .",
     "prepublishOnly": "pnpm run build"
   },
   "engines": {

@@ -16,13 +16,13 @@ npxで実行する場合（インストール不要）：
 npx always-commit <command>
 ```
 
-開発用（ソースから実行）：
+開発用（ソースからビルドしてグローバルインストール）：
 
 ```bash
 git clone https://github.com/TomoTom0/always-commit.git
 cd always-commit
-bun install
-bun link
+pnpm install
+mise run install
 ```
 
 ## コマンド
@@ -36,6 +36,8 @@ alcom save [message]
 ```
 
 - **[message]**: オプション。スナップショットの説明。デフォルトは "WIP: snapshot" です。
+- **--auto**: 変更ファイルの差分情報からコミットメッセージを自動生成します。変更量が多い順に `path (+added/-deleted)` 形式で表示されます。変更がない場合はタイムスタンプが使用されます。
+- **-f, --force**: 変更がなくてもコミットを作成します。
 - **動作**: すべての変更をステージング (`git add .`) し、コミットを作成して内部状態に記録します。
 
 ### `undo`

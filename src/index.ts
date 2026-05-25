@@ -38,14 +38,30 @@ Examples:
   $ always-commit finish "feat: complete refactoring"
   `);
 
+function generateAutoMessage(): string {
+    return formatLocalDate(new Date());
+}
+
+function summarizeDiffStat(entries: git.DiffEntry[]): string {
+    if (entries.length === 0) return '';
+    const sorted = [...entries].sort((a, b) =>
+        (b.added + b.deleted) - (a.added + a.deleted)
+    );
+    const parts = sorted.map(e => `${e.path} (+${e.added}/-${e.deleted})`);
+    const result = parts.join(', ');
+    return result.length > 120 ? result.slice(0, 117) + '...' : result;
+}
+
 program
     .command('save')
     .description('Save a temporary snapshot of the current working directory.')
     .argument('[message]', 'Commit message for the snapshot', 'WIP: snapshot')
     .option('-f, --force', 'Force commit even if there are no changes')
+    .option('--auto', 'Auto-generate message from diff stat')
     .addHelpText('after', `
 Example:
   $ always-commit save "WIP: refactoring user auth"
+  $ always-commit save --auto
   `)
     .action(async (message, cmdOptions) => {
         try {
@@ -53,7 +69,17 @@ Example:
 
             const globalOptions = program.opts();
             const options = { ...globalOptions, ...cmdOptions };
-            const fullMessage = `--alcom-- ${message}`;
+
+            let commitMessage = message;
+            if (options.auto) {
+                const entries = await git.getDiffStat();
+                if (entries.length > 0) {
+                    commitMessage = summarizeDiffStat(entries);
+                } else {
+                    commitMessage = generateAutoMessage();
+                }
+            }
+            const fullMessage = `--alcom-- ${commitMessage}`;
 
             if (options.dryRun) {
                 console.log(`[Dry Run] Would save snapshot with message: "${fullMessage}"`);
