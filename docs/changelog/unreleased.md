@@ -2,7 +2,7 @@
 
 ## New Features
 
-（変更内容をここに記載）
+- `alcom save --auto`: 変更ファイルの差分情報からコミットメッセージを自動生成する機能を追加。変更量が多い順に `path (+added/-deleted)` 形式でソート・表示される (#38)
 
 ## Bug Fixes
 

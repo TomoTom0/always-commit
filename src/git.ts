@@ -167,6 +167,56 @@ export async function findLatestAlcomSession(): Promise<CommitInfo[]> {
     }
 }
 
+export interface DiffEntry {
+    path: string;
+    added: number;
+    deleted: number;
+}
+
+export async function getDiffStat(): Promise<DiffEntry[]> {
+    const status = await git.status();
+    if (status.files.length === 0) return [];
+
+    // git diff --numstat HEAD captures all changes (working tree + index vs HEAD),
+    // but only for tracked files. We need to also handle untracked files.
+    const [trackedDiff, cachedDiff] = await Promise.all([
+        git.raw(['diff', '--numstat', 'HEAD']),
+        git.raw(['diff', '--cached', '--numstat', 'HEAD']),
+    ]);
+
+    const entries = new Map<string, DiffEntry>();
+
+    for (const raw of [trackedDiff, cachedDiff]) {
+        for (const line of raw.trim().split('\n').filter(Boolean)) {
+            const [addStr, delStr, filePath] = line.split('\t');
+            const added = addStr === '-' ? 0 : parseInt(addStr, 10);
+            const deleted = delStr === '-' ? 0 : parseInt(delStr, 10);
+            const existing = entries.get(filePath);
+            if (existing) {
+                existing.added += added;
+                existing.deleted += deleted;
+            } else {
+                entries.set(filePath, { path: filePath, added, deleted });
+            }
+        }
+    }
+
+    // Untracked files won't appear in diff; add them from status with 0 counts.
+    // After git add they'll show in cached diff, but some may only be in working tree.
+    for (const f of status.not_added) {
+        if (!entries.has(f)) {
+            entries.set(f, { path: f, added: 0, deleted: 0 });
+        }
+    }
+    for (const f of status.created) {
+        if (!entries.has(f)) {
+            entries.set(f, { path: f, added: 0, deleted: 0 });
+        }
+    }
+
+    return Array.from(entries.values());
+}
+
 export async function getDiffNameStatus(from: string, to: string): Promise<string[]> {
     const result = await git.raw(['diff', '--name-status', from, to]);
     return result.trim().split('\n').filter(Boolean);

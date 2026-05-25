@@ -1,0 +1,3 @@
+[tasks.install]
+description = "Build and install alcom globally"
+run = "pnpm run install:global"

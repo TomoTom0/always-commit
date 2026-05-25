@@ -9,7 +9,7 @@ Claude Code の Hooks 機能を使い、プロンプト送信ごとに `alcom sa
 ```
 ユーザーがプロンプトを送信
     → UserPromptSubmit hook 発火
-    → alcom save <timestamp>  # 自動スナップショット
+    → alcom save --auto  # 変更差分からメッセージ自動生成してスナップショット
     → Claude が作業を開始
 
 セッション終了
