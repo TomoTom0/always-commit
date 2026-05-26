@@ -60,6 +60,25 @@ function truncateFileList(files: string[], maxFiles: number = 20): string[] {
     return shown;
 }
 
+async function showCurrentStateSummary(): Promise<void> {
+    try {
+        const currentState = await state.loadState();
+        const remaining = currentState.commits.length;
+        const currentBase = await git.findBaseCommit();
+        const currentDiff = await git.getDiffNameStatus(currentBase, 'HEAD');
+        console.error(`${remaining} snapshot${remaining !== 1 ? 's' : ''} remaining.`);
+        if (currentDiff.length > 0) {
+            const truncated = truncateFileList(currentDiff, 10);
+            console.error('Current changes:');
+            truncated.forEach(f => console.error(f));
+        } else {
+            console.error('No changes from base.');
+        }
+    } catch (error: any) {
+        console.error(`Warning: Failed to generate state summary: ${error.message}`);
+    }
+}
+
 program
     .command('save')
     .description('Save a temporary snapshot of the current working directory.')
@@ -167,18 +186,7 @@ Description:
             }));
 
             // Show current state summary on stderr
-            const currentState = await state.loadState();
-            const remaining = currentState.commits.length;
-            const currentBase = await git.findBaseCommit();
-            const currentDiff = await git.getDiffNameStatus(currentBase, 'HEAD');
-            console.error(`${remaining} snapshot${remaining !== 1 ? 's' : ''} remaining.`);
-            if (currentDiff.length > 0) {
-                const truncated = truncateFileList(currentDiff, 10);
-                console.error('Current changes:');
-                truncated.forEach(f => console.error(f));
-            } else {
-                console.error('No changes from base.');
-            }
+            await showCurrentStateSummary();
         } catch (error: any) {
             console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
@@ -226,18 +234,7 @@ Description:
             }));
 
             // Show current state summary on stderr
-            const currentState = await state.loadState();
-            const remaining = currentState.commits.length;
-            const currentBase = await git.findBaseCommit();
-            const currentDiff = await git.getDiffNameStatus(currentBase, 'HEAD');
-            console.error(`${remaining} snapshot${remaining !== 1 ? 's' : ''} remaining.`);
-            if (currentDiff.length > 0) {
-                const truncated = truncateFileList(currentDiff, 10);
-                console.error('Current changes:');
-                truncated.forEach(f => console.error(f));
-            } else {
-                console.error('No changes from base.');
-            }
+            await showCurrentStateSummary();
         } catch (error: any) {
             console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);

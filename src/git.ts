@@ -4,19 +4,31 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-function getGitBaseDir(): string {
-    const agentRoot = process.env.CODING_AGENT_ROOT;
-    if (agentRoot) {
-        if (!existsSync(join(agentRoot, '.git'))) {
-            console.error(`CODING_AGENT_ROOT is set but .git not found: ${agentRoot}`);
-            process.exit(1);
+let gitInstance: SimpleGit | null = null;
+
+function getGitInstance(): SimpleGit {
+    if (!gitInstance) {
+        const agentRoot = process.env.CODING_AGENT_ROOT;
+        if (agentRoot) {
+            if (!existsSync(join(agentRoot, '.git'))) {
+                console.error(`CODING_AGENT_ROOT is set but .git not found: ${agentRoot}`);
+                process.exit(1);
+            }
+            gitInstance = simpleGit(agentRoot);
+        } else {
+            gitInstance = simpleGit(process.cwd());
         }
-        return agentRoot;
     }
-    return process.cwd();
+    return gitInstance;
 }
 
-const git: SimpleGit = simpleGit(getGitBaseDir());
+const git: SimpleGit = new Proxy({} as SimpleGit, {
+    get(_target, prop) {
+        const instance = getGitInstance();
+        const value = Reflect.get(instance, prop);
+        return typeof value === 'function' ? value.bind(instance) : value;
+    }
+});
 
 export const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
