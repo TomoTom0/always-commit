@@ -227,7 +227,7 @@ alcom setup
 - **動作**:
     1. `alcom-save.sh` をスクリプトディレクトリに配置します
     2. `UserPromptSubmit` hookを `settings.json` に登録します
-    3. `PreToolUse` ブランチ切り替えガードを `settings.json` に登録します
+    3. `PreToolUse` フック（`git checkout` ブロック + `git switch` 時のスナップショットガード）を `settings.json` に登録します
 
 ### `docs`
 
