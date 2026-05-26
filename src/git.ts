@@ -1,9 +1,22 @@
 import simpleGit, { type SimpleGit } from 'simple-git';
 import { spawn } from 'child_process';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-const git: SimpleGit = simpleGit();
+function getGitBaseDir(): string {
+    const agentRoot = process.env.CODING_AGENT_ROOT;
+    if (agentRoot) {
+        if (!existsSync(join(agentRoot, '.git'))) {
+            console.error(`CODING_AGENT_ROOT is set but .git not found: ${agentRoot}`);
+            process.exit(1);
+        }
+        return agentRoot;
+    }
+    return process.cwd();
+}
+
+const git: SimpleGit = simpleGit(getGitBaseDir());
 
 export const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 

@@ -52,6 +52,14 @@ function summarizeDiffStat(entries: git.DiffEntry[]): string {
     return result.length > 120 ? result.slice(0, 117) + '...' : result;
 }
 
+function truncateFileList(files: string[], maxFiles: number = 20): string[] {
+    if (files.length <= maxFiles) return files;
+    const shown = files.slice(0, maxFiles);
+    const remaining = files.length - maxFiles;
+    shown.push(`... and ${remaining} more file${remaining > 1 ? 's' : ''}`);
+    return shown;
+}
+
 program
     .command('save')
     .description('Save a temporary snapshot of the current working directory.')
@@ -157,6 +165,20 @@ Description:
                 revertedFiles: diffFiles,
                 hint: 'Use \'alcom redo\' to restore this snapshot.',
             }));
+
+            // Show current state summary on stderr
+            const currentState = await state.loadState();
+            const remaining = currentState.commits.length;
+            const currentBase = await git.findBaseCommit();
+            const currentDiff = await git.getDiffNameStatus(currentBase, 'HEAD');
+            console.error(`${remaining} snapshot${remaining !== 1 ? 's' : ''} remaining.`);
+            if (currentDiff.length > 0) {
+                const truncated = truncateFileList(currentDiff, 10);
+                console.error('Current changes:');
+                truncated.forEach(f => console.error(f));
+            } else {
+                console.error('No changes from base.');
+            }
         } catch (error: any) {
             console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
@@ -202,6 +224,20 @@ Description:
                 hash: undoneCommit.hash,
                 restoredMessage: snapshotMessage,
             }));
+
+            // Show current state summary on stderr
+            const currentState = await state.loadState();
+            const remaining = currentState.commits.length;
+            const currentBase = await git.findBaseCommit();
+            const currentDiff = await git.getDiffNameStatus(currentBase, 'HEAD');
+            console.error(`${remaining} snapshot${remaining !== 1 ? 's' : ''} remaining.`);
+            if (currentDiff.length > 0) {
+                const truncated = truncateFileList(currentDiff, 10);
+                console.error('Current changes:');
+                truncated.forEach(f => console.error(f));
+            } else {
+                console.error('No changes from base.');
+            }
         } catch (error: any) {
             console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
@@ -524,6 +560,7 @@ program
     .description('Show changed files since the base commit (first non-alcom commit).')
     .argument('[args...]', 'Additional git diff arguments')
     .option('--base <hash>', 'Manually specify the base commit hash')
+    .option('-s, --short', 'Show a concise summary with file count instead of full list')
     .allowUnknownOption()
     .addHelpText('after', `
 Example:
@@ -531,11 +568,27 @@ Example:
   M  src/index.ts
   A  docs/new-doc.md
   $ always-commit status --stat
+  $ always-commit status --short
   $ always-commit status -- src/
   `)
     .action(async (args: string[], cmdOptions) => {
         try {
             const baseHash = cmdOptions.base || await git.findBaseCommit();
+
+            if (cmdOptions.short) {
+                const nameStatusLines = await git.getDiffNameStatus(baseHash, 'HEAD');
+                if (nameStatusLines.length === 0) {
+                    console.log('No changes from base.');
+                    return;
+                }
+                const totalFiles = nameStatusLines.length;
+                const truncated = truncateFileList(nameStatusLines, 20);
+                console.log(`${totalFiles} file${totalFiles !== 1 ? 's' : ''} changed:`);
+                for (const line of truncated) {
+                    console.log(line);
+                }
+                return;
+            }
 
             const proc = spawn('git', ['--no-pager', 'diff', '--name-status', baseHash, ...args], {
                 stdio: 'inherit',
@@ -595,6 +648,7 @@ program
     .description('List commits in the current session.')
     .option('-n, --number <count>', 'Number of commits to show', '10')
     .option('-a, --all', 'Show all commits (default: only alcom save commits)')
+    .option('-l, --long', 'Show full commit messages without truncation')
     .addHelpText('after', `
 Description:
   Shows commits from the current active session only.
@@ -603,6 +657,7 @@ Description:
 Example:
   $ always-commit log
   $ always-commit log --all
+  $ always-commit log --long
   `)
     .action(async (cmdOptions) => {
         try {
@@ -631,7 +686,9 @@ Example:
             for (const commit of commitsToShow) {
                 const hash = commit.hash.substring(0, 7);
                 const date = commit.date;
-                const msg = commit.message.length > 30 ? commit.message.substring(0, 27) + '...' : commit.message;
+                const displayMessage = commit.message.replace('--alcom-- ', '');
+                const msg = cmdOptions.long ? displayMessage
+                    : displayMessage.length > 60 ? displayMessage.substring(0, 57) + '...' : displayMessage;
                 console.log(`${hash} ${date} ${msg}`);
             }
 
