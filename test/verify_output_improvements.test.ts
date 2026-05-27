@@ -146,7 +146,7 @@ test('status --short shows "No changes" when clean', async () => {
         alcomOrThrow(['finish', 'done'], tmpDir);
 
         const result = alcomOrThrow(['status', '--short'], tmpDir);
-        expect(result.stdout).toContain('No changes from base.');
+        expect(result.stdout).toContain('No changes.');
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
@@ -168,6 +168,142 @@ test('status default mode is unchanged (piped git output)', async () => {
         const result = alcomOrThrow(['status'], tmpDir);
         // Default status should show raw git diff name-status output
         expect(result.stdout).toMatch(/A\s+new\.txt/);
+    } finally {
+        await rm(tmpDir, { recursive: true, force: true });
+    }
+});
+
+test('status default compares with previous snapshot', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-prev-'));
+
+    try {
+        gitInit(tmpDir);
+
+        await writeFile(join(tmpDir, 'base.txt'), 'base\n');
+        shOrThrow('git', ['add', 'base.txt'], { cwd: tmpDir });
+        shOrThrow('git', ['commit', '-m', 'chore: base commit'], { cwd: tmpDir });
+
+        // Save snapshot 1
+        await writeFile(join(tmpDir, 'a.txt'), 'a\n');
+        await writeFile(join(tmpDir, 'b.txt'), 'b\n');
+        alcomOrThrow(['save', 'snap1'], tmpDir);
+
+        // Save snapshot 2
+        await writeFile(join(tmpDir, 'c.txt'), 'c\n');
+        alcomOrThrow(['save', 'snap2'], tmpDir);
+
+        // Default (depth 1): should show only changes from snap1 -> snap2 (c.txt)
+        const result = alcomOrThrow(['status', '--short'], tmpDir);
+        expect(result.stdout).toContain('c.txt');
+        expect(result.stdout).not.toContain('a.txt');
+        expect(result.stdout).not.toContain('b.txt');
+    } finally {
+        await rm(tmpDir, { recursive: true, force: true });
+    }
+});
+
+test('status --depth 2 compares with 2 snapshots ago', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-depth2-'));
+
+    try {
+        gitInit(tmpDir);
+
+        await writeFile(join(tmpDir, 'base.txt'), 'base\n');
+        shOrThrow('git', ['add', 'base.txt'], { cwd: tmpDir });
+        shOrThrow('git', ['commit', '-m', 'chore: base commit'], { cwd: tmpDir });
+
+        // Save snapshot 1
+        await writeFile(join(tmpDir, 'a.txt'), 'a\n');
+        alcomOrThrow(['save', 'snap1'], tmpDir);
+
+        // Save snapshot 2
+        await writeFile(join(tmpDir, 'b.txt'), 'b\n');
+        alcomOrThrow(['save', 'snap2'], tmpDir);
+
+        // Save snapshot 3
+        await writeFile(join(tmpDir, 'c.txt'), 'c\n');
+        alcomOrThrow(['save', 'snap3'], tmpDir);
+
+        // depth 2: snap1 -> HEAD, should show b.txt, c.txt (a.txt already in snap1)
+        const result = alcomOrThrow(['status', '--depth', '2', '--short'], tmpDir);
+        expect(result.stdout).toContain('b.txt');
+        expect(result.stdout).toContain('c.txt');
+    } finally {
+        await rm(tmpDir, { recursive: true, force: true });
+    }
+});
+
+test('status --base compares with session start', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-base-'));
+
+    try {
+        gitInit(tmpDir);
+
+        await writeFile(join(tmpDir, 'base.txt'), 'base\n');
+        shOrThrow('git', ['add', 'base.txt'], { cwd: tmpDir });
+        shOrThrow('git', ['commit', '-m', 'chore: base commit'], { cwd: tmpDir });
+
+        // Save snapshot 1
+        await writeFile(join(tmpDir, 'a.txt'), 'a\n');
+        alcomOrThrow(['save', 'snap1'], tmpDir);
+
+        // Save snapshot 2
+        await writeFile(join(tmpDir, 'b.txt'), 'b\n');
+        alcomOrThrow(['save', 'snap2'], tmpDir);
+
+        // --base: should show all files since base
+        const result = alcomOrThrow(['status', '--base', '--short'], tmpDir);
+        expect(result.stdout).toContain('a.txt');
+        expect(result.stdout).toContain('b.txt');
+    } finally {
+        await rm(tmpDir, { recursive: true, force: true });
+    }
+});
+
+test('status depth exceeding snapshots falls back to base', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-depth-fallback-'));
+
+    try {
+        gitInit(tmpDir);
+
+        await writeFile(join(tmpDir, 'base.txt'), 'base\n');
+        shOrThrow('git', ['add', 'base.txt'], { cwd: tmpDir });
+        shOrThrow('git', ['commit', '-m', 'chore: base commit'], { cwd: tmpDir });
+
+        // Only 1 snapshot
+        await writeFile(join(tmpDir, 'a.txt'), 'a\n');
+        alcomOrThrow(['save', 'snap1'], tmpDir);
+
+        // depth 5 exceeds available snapshots, should fall back to base
+        const result = alcomOrThrow(['status', '--depth', '5', '--short'], tmpDir);
+        expect(result.stdout).toContain('a.txt');
+    } finally {
+        await rm(tmpDir, { recursive: true, force: true });
+    }
+});
+
+test('status --depth with invalid value shows error', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-invalid-depth-'));
+
+    try {
+        gitInit(tmpDir);
+
+        await writeFile(join(tmpDir, 'base.txt'), 'base\n');
+        shOrThrow('git', ['add', 'base.txt'], { cwd: tmpDir });
+        shOrThrow('git', ['commit', '-m', 'chore: base commit'], { cwd: tmpDir });
+
+        await writeFile(join(tmpDir, 'a.txt'), 'a\n');
+        alcomOrThrow(['save', 'snap1'], tmpDir);
+
+        // Negative value
+        const neg = alcom(['status', '--depth', '-1', '--short'], tmpDir);
+        expect(neg.code).not.toBe(0);
+        expect(neg.stderr).toContain('Invalid depth');
+
+        // Non-numeric (parseInt returns NaN)
+        const nan = alcom(['status', '--depth', 'abc', '--short'], tmpDir);
+        expect(nan.code).not.toBe(0);
+        expect(nan.stderr).toContain('Invalid depth');
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
@@ -258,7 +394,7 @@ test('CODING_AGENT_ROOT overrides working directory', async () => {
         });
 
         expect(result.status).toBe(0);
-        expect(result.stdout).toContain('No changes from base.');
+        expect(result.stdout).toContain('No changes.');
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
         await rm(workDir, { recursive: true, force: true });

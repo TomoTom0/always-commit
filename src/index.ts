@@ -552,30 +552,54 @@ Examples:
 
 
 
+async function resolveStatusFromHash(options: { base?: boolean; depth?: number }): Promise<string> {
+    if (options.base) {
+        return git.findBaseCommit();
+    }
+
+    const depth = options.depth ?? 1;
+    if (Number.isNaN(depth) || !Number.isInteger(depth) || depth < 1) {
+        throw new Error('Invalid depth. Depth must be a positive integer.');
+    }
+    const currentState = await state.loadState();
+    const commits = currentState.commits;
+
+    if (commits.length === 0) {
+        return git.findBaseCommit();
+    }
+
+    const targetIndex = commits.length - 1 - depth;
+    if (targetIndex < 0) {
+        return git.findBaseCommit();
+    }
+
+    return commits[targetIndex].hash;
+}
+
 program
     .command('status')
-    .description('Show changed files since the base commit (first non-alcom commit).')
+    .description('Show changed files since the previous snapshot.')
     .argument('[args...]', 'Additional git diff arguments')
-    .option('--base <hash>', 'Manually specify the base commit hash')
+    .option('--depth <n>', 'Compare with N snapshots ago (default: 1)', (v: string) => parseInt(v, 10), 1)
+    .option('--base', 'Compare with the base commit (session start)')
     .option('-s, --short', 'Show a concise summary with file count instead of full list')
     .allowUnknownOption()
     .addHelpText('after', `
 Example:
-  $ always-commit status
-  M  src/index.ts
-  A  docs/new-doc.md
-  $ always-commit status --stat
+  $ always-commit status              # Changes from previous snapshot
+  $ always-commit status --depth 2    # Changes from 2 snapshots ago
+  $ always-commit status --base       # All changes from session start
   $ always-commit status --short
   $ always-commit status -- src/
   `)
     .action(async (args: string[], cmdOptions) => {
         try {
-            const baseHash = cmdOptions.base || await git.findBaseCommit();
+            const fromHash = await resolveStatusFromHash(cmdOptions);
 
             if (cmdOptions.short) {
-                const nameStatusLines = await git.getDiffNameStatus(baseHash, 'HEAD');
+                const nameStatusLines = await git.getDiffNameStatus(fromHash, 'HEAD');
                 if (nameStatusLines.length === 0) {
-                    console.log('No changes from base.');
+                    console.log('No changes.');
                     return;
                 }
                 const totalFiles = nameStatusLines.length;
@@ -587,7 +611,7 @@ Example:
                 return;
             }
 
-            const proc = spawn('git', ['--no-pager', 'diff', '--name-status', baseHash, ...args], {
+            const proc = spawn('git', ['--no-pager', 'diff', '--name-status', fromHash, ...args], {
                 stdio: 'inherit',
             });
 
