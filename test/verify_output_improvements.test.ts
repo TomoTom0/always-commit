@@ -282,6 +282,33 @@ test('status depth exceeding snapshots falls back to base', async () => {
     }
 });
 
+test('status --depth with invalid value shows error', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-invalid-depth-'));
+
+    try {
+        gitInit(tmpDir);
+
+        await writeFile(join(tmpDir, 'base.txt'), 'base\n');
+        shOrThrow('git', ['add', 'base.txt'], { cwd: tmpDir });
+        shOrThrow('git', ['commit', '-m', 'chore: base commit'], { cwd: tmpDir });
+
+        await writeFile(join(tmpDir, 'a.txt'), 'a\n');
+        alcomOrThrow(['save', 'snap1'], tmpDir);
+
+        // Negative value
+        const neg = alcom(['status', '--depth', '-1', '--short'], tmpDir);
+        expect(neg.code).not.toBe(0);
+        expect(neg.stderr).toContain('Invalid depth');
+
+        // Non-numeric (parseInt returns NaN)
+        const nan = alcom(['status', '--depth', 'abc', '--short'], tmpDir);
+        expect(nan.code).not.toBe(0);
+        expect(nan.stderr).toContain('Invalid depth');
+    } finally {
+        await rm(tmpDir, { recursive: true, force: true });
+    }
+});
+
 test('log strips --alcom-- prefix', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-log-prefix-'));
 

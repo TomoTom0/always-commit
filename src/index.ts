@@ -558,6 +558,9 @@ async function resolveStatusFromHash(options: { base?: boolean; depth?: number }
     }
 
     const depth = options.depth ?? 1;
+    if (Number.isNaN(depth) || !Number.isInteger(depth) || depth < 1) {
+        throw new Error('Invalid depth. Depth must be a positive integer.');
+    }
     const currentState = await state.loadState();
     const commits = currentState.commits;
 
