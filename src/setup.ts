@@ -118,7 +118,7 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
                     type: 'command',
                     command:
                         'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
-                        'if echo "$cmd" | grep -qE \'^\\s*git checkout\\b\'; then ' +
+                        'if echo "$cmd" | grep -qE \'\\bgit\\s+checkout(\\s+|$)\'; then ' +
                         'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "git checkout は使用禁止です。ブランチ切替には git switch、ファイル復元には git restore を使用してください。"}}\'; ' +
                         'fi',
                 },
@@ -126,7 +126,7 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
                     type: 'command',
                     command:
                         'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
-                        'if echo "$cmd" | grep -qE \'^\\s*git switch\\b\'; then ' +
+                        'if echo "$cmd" | grep -qE \'\\bgit\\s+switch(\\s+|$)\'; then ' +
                         'if [ -n "$(alcom log 2>/dev/null)" ]; then ' +
                         'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "alcomの未完了スナップショットがあります。ブランチ切替前に alcom finish でスナップショットをまとめてください。不要なスナップショットは alcom undo で取り消せます。"}}\'; ' +
                         'fi; fi',
