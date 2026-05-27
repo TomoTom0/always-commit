@@ -78,7 +78,7 @@ chmod +x ~/.local/bin/alcom-save.sh
 セッション中にブランチを切り替えると、一時スナップショットが意図しないブランチに残留します。`PreToolUse` hook で2段階のガードを設定します:
 
 1. **`git checkout` 一律ブロック**: ブランチ切替には `git switch`、ファイル復元には `git restore` の使用を強制します
-2. **`git switch` 時のスナップショットガード**: alcomの未完了スナップショットがある場合、`alcom finish` を促してブロックします
+2. **`git switch` 時のスナップショットガード**: alcomの未完了スナップショットがある場合、作業の保持（`alcom finish`）または破棄（`alcom undo`）を促してブロックします
 
 ```json
 {
@@ -93,7 +93,7 @@ chmod +x ~/.local/bin/alcom-save.sh
           },
           {
             "type": "command",
-            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE '\\bgit\\s+switch(\\s+|$)'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了スナップショットがあります。ブランチ切替前に alcom finish でスナップショットをまとめてください。不要なスナップショットは alcom undo で取り消せます。\"}}'; fi; fi"
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE '\\bgit\\s+switch(\\s+|$)'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了スナップショットがあります。ブランチ切替前に alcom status で内容を確認し、作業を保持する場合は alcom finish、作業を破棄する場合は alcom undo してください。\"}}'; fi; fi"
           }
         ]
       }

@@ -48,7 +48,11 @@ function summarizeDiffStat(entries: git.DiffEntry[]): string {
         (b.added + b.deleted) - (a.added + a.deleted)
     );
     const parts = sorted.map(e => `${e.path} (+${e.added}/-${e.deleted})`);
-    const result = parts.join(', ');
+    const files = parts.join(', ');
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const result = `${time} ${files}`;
     return result.length > 120 ? result.slice(0, 117) + '...' : result;
 }
 

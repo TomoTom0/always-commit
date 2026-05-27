@@ -62,15 +62,15 @@ describe('setup', () => {
         expect(hasSwitchGuard).toBe(true);
     });
 
-    it('does not add duplicate hooks when already configured', async () => {
+    it('replaces existing alcom hooks without adding duplicates', async () => {
         const scriptDir = path.join(TMP_DIR, 'bin');
         const settingsPath = path.join(TMP_DIR, '.claude', 'settings.json');
 
         await setup({ project: false, scriptDir, dryRun: false, settingsPathOverride: settingsPath });
         const result2 = await setup({ project: false, scriptDir, dryRun: false, settingsPathOverride: settingsPath });
 
-        expect(result2.userPromptSubmitAdded).toBe(false);
-        expect(result2.preToolUseAdded).toBe(false);
+        expect(result2.userPromptSubmitAdded).toBe(true);
+        expect(result2.preToolUseAdded).toBe(true);
 
         const content = JSON.parse(await readFile(settingsPath, 'utf-8'));
         expect(content.hooks.UserPromptSubmit.length).toBe(1);

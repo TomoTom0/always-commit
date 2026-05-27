@@ -40,20 +40,6 @@ async function readJson(filePath: string): Promise<Record<string, unknown>> {
     }
 }
 
-function isAlcomHookPresent(hooks: unknown[]): boolean {
-    return hooks.some((h) => {
-        if (typeof h !== 'object' || h === null) return false;
-        const hook = h as Record<string, unknown>;
-        const innerHooks = hook['hooks'];
-        if (!Array.isArray(innerHooks)) return false;
-        return innerHooks.some((inner) => {
-            if (typeof inner !== 'object' || inner === null) return false;
-            const cmd = (inner as Record<string, unknown>)['command'];
-            return typeof cmd === 'string' && cmd.includes('alcom');
-        });
-    });
-}
-
 export async function setup(options: SetupOptions): Promise<SetupResult> {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const hookScriptSrc = path.join(__dirname, '..', 'scripts', 'claude-code-hook.sh');
@@ -96,11 +82,27 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
         hooks['UserPromptSubmit'] = [];
     }
     const userPromptHooks = hooks['UserPromptSubmit'] as unknown[];
-    if (!isAlcomHookPresent(userPromptHooks)) {
-        userPromptHooks.push({
-            matcher: '',
-            hooks: [{ type: 'command', command: scriptPath }],
+    const existingUserPromptIdx = userPromptHooks.findIndex((h) => {
+        if (typeof h !== 'object' || h === null) return false;
+        const hook = h as Record<string, unknown>;
+        const innerHooks = hook['hooks'];
+        if (!Array.isArray(innerHooks)) return false;
+        return innerHooks.some((inner) => {
+            if (typeof inner !== 'object' || inner === null) return false;
+            const cmd = (inner as Record<string, unknown>)['command'];
+            return typeof cmd === 'string' && cmd.includes('alcom');
         });
+    });
+    const newUserPrompt = {
+        matcher: '',
+        hooks: [{ type: 'command', command: scriptPath }],
+    };
+    if (existingUserPromptIdx >= 0) {
+        userPromptHooks[existingUserPromptIdx] = newUserPrompt;
+        result.userPromptSubmitAdded = true;
+        modified = true;
+    } else {
+        userPromptHooks.push(newUserPrompt);
         result.userPromptSubmitAdded = true;
         modified = true;
     }
@@ -110,29 +112,45 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
         hooks['PreToolUse'] = [];
     }
     const preToolUseHooks = hooks['PreToolUse'] as unknown[];
-    if (!isAlcomHookPresent(preToolUseHooks)) {
-        preToolUseHooks.push({
-            matcher: 'Bash',
-            hooks: [
-                {
-                    type: 'command',
-                    command:
-                        'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
-                        'if echo "$cmd" | grep -qE \'\\bgit\\s+checkout(\\s+|$)\'; then ' +
-                        'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "git checkout は使用禁止です。ブランチ切替には git switch、ファイル復元には git restore を使用してください。"}}\'; ' +
-                        'fi',
-                },
-                {
-                    type: 'command',
-                    command:
-                        'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
-                        'if echo "$cmd" | grep -qE \'\\bgit\\s+switch(\\s+|$)\'; then ' +
-                        'if [ -n "$(alcom log 2>/dev/null)" ]; then ' +
-                        'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "alcomの未完了スナップショットがあります。ブランチ切替前に alcom finish でスナップショットをまとめてください。不要なスナップショットは alcom undo で取り消せます。"}}\'; ' +
-                        'fi; fi',
-                },
-            ],
+    const existingAlcomIdx = preToolUseHooks.findIndex((h) => {
+        if (typeof h !== 'object' || h === null) return false;
+        const hook = h as Record<string, unknown>;
+        const innerHooks = hook['hooks'];
+        if (!Array.isArray(innerHooks)) return false;
+        return innerHooks.some((inner) => {
+            if (typeof inner !== 'object' || inner === null) return false;
+            const cmd = (inner as Record<string, unknown>)['command'];
+            return typeof cmd === 'string' && cmd.includes('alcom');
         });
+    });
+    const newPreToolUse = {
+        matcher: 'Bash',
+        hooks: [
+            {
+                type: 'command',
+                command:
+                    'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
+                    'if echo "$cmd" | grep -qE \'\\bgit\\s+checkout(\\s+|$)\'; then ' +
+                    'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "git checkout は使用禁止です。ブランチ切替には git switch、ファイル復元には git restore を使用してください。"}}\'; ' +
+                    'fi',
+            },
+            {
+                type: 'command',
+                command:
+                    'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
+                    'if echo "$cmd" | grep -qE \'\\bgit\\s+switch(\\s+|$)\'; then ' +
+                    'if [ -n "$(alcom log 2>/dev/null)" ]; then ' +
+                    'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "alcomの未完了スナップショットがあります。ブランチ切替前に alcom status で内容を確認し、作業を保持する場合は alcom finish、作業を破棄する場合は alcom undo してください。"}}\'; ' +
+                    'fi; fi',
+            },
+        ],
+    };
+    if (existingAlcomIdx >= 0) {
+        preToolUseHooks[existingAlcomIdx] = newPreToolUse;
+        result.preToolUseAdded = true;
+        modified = true;
+    } else {
+        preToolUseHooks.push(newPreToolUse);
         result.preToolUseAdded = true;
         modified = true;
     }
