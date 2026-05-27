@@ -127,16 +127,20 @@ alcom git diff --stat @base
 
 ### `status`
 
-セッション開始時から現在までの変更ファイル一覧を表示します。
-`alcom git diff --name-status @base` のエイリアスです。
+直前のスナップショットからの変更ファイル一覧を表示します。
 
 ```bash
 alcom status
 ```
 
+- **--depth \<n\>**: N個前のスナップショットと比較します（デフォルト: 1）。
+- **--base**: セッション開始時（base commit）からの全変更を表示します。
 - **-s, --short**: ファイル件数とtruncated listの簡易表示モード。ファイルが20件を超える場合は `... and N more files` と省略されます。
 
 ```bash
+alcom status                  # 直前のスナップショットとの比較
+alcom status --depth 2        # 2つ前のスナップショットとの比較
+alcom status --base           # セッション開始時からの全変更
 alcom status --short
 ```
 
