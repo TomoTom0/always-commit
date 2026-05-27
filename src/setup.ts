@@ -105,7 +105,7 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
         modified = true;
     }
 
-    // Add PreToolUse branch guard
+    // Add PreToolUse guards: block git checkout entirely, guard git switch when alcom has snapshots
     if (!Array.isArray(hooks['PreToolUse'])) {
         hooks['PreToolUse'] = [];
     }
@@ -118,9 +118,17 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
                     type: 'command',
                     command:
                         'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
-                        'if echo "$cmd" | grep -qE \'git checkout(\\s+-[bB]|\\s+[^\\s-]|\\s*$)\' || echo "$cmd" | grep -qE \'git switch\'; then ' +
+                        'if echo "$cmd" | grep -qE \'\\bgit\\s+checkout(\\s+|$)\'; then ' +
+                        'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "git checkout は使用禁止です。ブランチ切替には git switch、ファイル復元には git restore を使用してください。"}}\'; ' +
+                        'fi',
+                },
+                {
+                    type: 'command',
+                    command:
+                        'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
+                        'if echo "$cmd" | grep -qE \'\\bgit\\s+switch(\\s+|$)\'; then ' +
                         'if [ -n "$(alcom log 2>/dev/null)" ]; then ' +
-                        'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "alcomの未完了コミットがあります。alcom logで内容を確認し、不要なスナップショットだけalcom undoで取り消し、残りをalcom finishでまとめてください。undoしすぎた場合はalcom redoで戻せます。"}}\'; ' +
+                        'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "alcomの未完了スナップショットがあります。ブランチ切替前に alcom finish でスナップショットをまとめてください。不要なスナップショットは alcom undo で取り消せます。"}}\'; ' +
                         'fi; fi',
                 },
             ],
