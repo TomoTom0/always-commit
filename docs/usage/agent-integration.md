@@ -75,7 +75,10 @@ chmod +x ~/.local/bin/alcom-save.sh
 
 ## 推奨: ブランチ切り替え時のガード
 
-セッション中に `git checkout` / `git switch` でブランチを切り替えると、一時スナップショットが意図しないブランチに残留します。`PreToolUse` hook で防止できます（`git checkout -- <file>` などのファイル復元操作はブロックされません。`git checkout -b` / `git checkout -B` によるブランチ作成もブロック対象です）。
+セッション中にブランチを切り替えると、一時スナップショットが意図しないブランチに残留します。`PreToolUse` hook で2段階のガードを設定します:
+
+1. **`git checkout` 一律ブロック**: ブランチ切替には `git switch`、ファイル復元には `git restore` の使用を強制します
+2. **`git switch` 時のスナップショットガード**: alcomの未完了スナップショットがある場合、作業の保持（`alcom finish`）または破棄（`alcom undo`）を促してブロックします
 
 ```json
 {
@@ -86,7 +89,11 @@ chmod +x ~/.local/bin/alcom-save.sh
         "hooks": [
           {
             "type": "command",
-            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE 'git checkout(\\s+-[bB]|\\s+[^\\s-]|\\s*$)' || echo \"$cmd\" | grep -qE 'git switch'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了コミットがあります。alcom logで内容を確認し、不要なスナップショットだけalcom undoで取り消し、残りをalcom finishでまとめてください。undoしすぎた場合はalcom redoで戻せます。\"}}'; fi; fi"
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE '(^|[[:space:]])git[[:space:]]+checkout([[:space:]]|$)'; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"git checkout は使用禁止です。ブランチ切替には git switch、ファイル復元には git restore を使用してください。\"}}'; fi"
+          },
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE '(^|[[:space:]])git[[:space:]]+switch([[:space:]]|$)'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了スナップショットがあります。ブランチ切替前に alcom status で内容を確認し、作業を保持する場合は alcom finish、作業を破棄する場合は alcom undo してください。\"}}'; fi; fi"
           }
         ]
       }

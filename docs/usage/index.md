@@ -50,7 +50,7 @@ alcom undo
 
 - **動作**: 最後のコミットを取り消し（前の状態へのハードリセット）、内部状態から削除します。
 - **安全性**: 誤ったデータ損失を防ぐため、現在のHEADが最後に記録されたスナップショットと一致するかを確認します。
-- **出力**: 取り消したスナップショットのメッセージ（`undoneMessage`）、リセットされたファイル一覧（`revertedFiles`）、redoによる復元案内（`hint`）を含みます。
+- **出力**: 取り消したスナップショットのメッセージ（`undoneMessage`）、リセットされたファイル一覧（`revertedFiles`）、redoによる復元案内（`hint`）を含みます。stderrに残りスナップショット数と現在の変更状況も表示されます。
 
 ### `redo`
 
@@ -127,11 +127,21 @@ alcom git diff --stat @base
 
 ### `status`
 
-セッション開始時から現在までの変更ファイル一覧を表示します。
-`alcom git diff --name-status @base` のエイリアスです。
+直前のスナップショットからの変更ファイル一覧を表示します。
 
 ```bash
 alcom status
+```
+
+- **--depth \<n\>**: N個前のスナップショットと比較します（デフォルト: 1）。
+- **--base**: セッション開始時（base commit）からの全変更を表示します。
+- **-s, --short**: ファイル件数とtruncated listの簡易表示モード。ファイルが20件を超える場合は `... and N more files` と省略されます。
+
+```bash
+alcom status                  # 直前のスナップショットとの比較
+alcom status --depth 2        # 2つ前のスナップショットとの比較
+alcom status --base           # セッション開始時からの全変更
+alcom status --short
 ```
 
 ### `diff`
@@ -154,6 +164,7 @@ alcom log [options]
 - **オプション**:
     - `-n, --number <count>`: 表示するコミット数（デフォルト: 10）
     - `-a, --all`: すべてのコミットを表示（現在は未使用）
+    - `-l, --long`: メッセージを省略せずに全文表示
 
 - **動作**:
     - HEAD が `--alcom--` コミットの場合、セッションに含まれるコミットを表示します。
@@ -220,7 +231,7 @@ alcom setup
 - **動作**:
     1. `alcom-save.sh` をスクリプトディレクトリに配置します
     2. `UserPromptSubmit` hookを `settings.json` に登録します
-    3. `PreToolUse` ブランチ切り替えガードを `settings.json` に登録します
+    3. `PreToolUse` フック（`git checkout` ブロック + `git switch` 時のスナップショットガード）を `settings.json` に登録します
 
 ### `docs`
 
@@ -239,6 +250,28 @@ alcom docs
 
 # ユーザーガイドを表示
 alcom docs usage
+```
+
+## 環境変数
+
+### `CODING_AGENT_ROOT`
+
+alcomがGit作業ディレクトリを解決する際のルートディレクトリを指定します。coding agentがリポジトリ外からalcomを実行する場合に使用します。
+
+```bash
+CODING_AGENT_ROOT=/path/to/repo alcom status
+```
+
+- 設定されている場合、そのディレクトリの`.git`を使用します
+- `.git`が存在しない場合はエラーになります
+- 未設定の場合は現在の作業ディレクトリを使用します（従来通り）
+
+### `ALCOM_ALLOW`
+
+alcomの実行を制御します。
+
+```bash
+ALCOM_ALLOW=false alcom status  # 実行を拒否
 ```
 
 ## 活用例

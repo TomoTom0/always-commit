@@ -40,20 +40,6 @@ async function readJson(filePath: string): Promise<Record<string, unknown>> {
     }
 }
 
-function isAlcomHookPresent(hooks: unknown[]): boolean {
-    return hooks.some((h) => {
-        if (typeof h !== 'object' || h === null) return false;
-        const hook = h as Record<string, unknown>;
-        const innerHooks = hook['hooks'];
-        if (!Array.isArray(innerHooks)) return false;
-        return innerHooks.some((inner) => {
-            if (typeof inner !== 'object' || inner === null) return false;
-            const cmd = (inner as Record<string, unknown>)['command'];
-            return typeof cmd === 'string' && cmd.includes('alcom');
-        });
-    });
-}
-
 export async function setup(options: SetupOptions): Promise<SetupResult> {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const hookScriptSrc = path.join(__dirname, '..', 'scripts', 'claude-code-hook.sh');
@@ -96,35 +82,92 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
         hooks['UserPromptSubmit'] = [];
     }
     const userPromptHooks = hooks['UserPromptSubmit'] as unknown[];
-    if (!isAlcomHookPresent(userPromptHooks)) {
-        userPromptHooks.push({
-            matcher: '',
-            hooks: [{ type: 'command', command: scriptPath }],
+    const existingUserPromptIdx = userPromptHooks.findIndex((h) => {
+        if (typeof h !== 'object' || h === null) return false;
+        const hook = h as Record<string, unknown>;
+        const innerHooks = hook['hooks'];
+        if (!Array.isArray(innerHooks)) return false;
+        return innerHooks.some((inner) => {
+            if (typeof inner !== 'object' || inner === null) return false;
+            const cmd = (inner as Record<string, unknown>)['command'];
+            return typeof cmd === 'string' && cmd.includes('alcom');
         });
+    });
+    const newUserPrompt = {
+        matcher: '',
+        hooks: [{ type: 'command', command: scriptPath }],
+    };
+    if (existingUserPromptIdx >= 0) {
+        const existingHook = userPromptHooks[existingUserPromptIdx] as Record<string, unknown>;
+        const existingInner = Array.isArray(existingHook?.['hooks']) ? existingHook['hooks'] as unknown[] : [];
+        const existingCmd = existingInner.length > 0 && typeof existingInner[0] === 'object' && existingInner[0] !== null
+            ? (existingInner[0] as Record<string, unknown>)['command']
+            : undefined;
+        const newCmd = newUserPrompt.hooks[0].command;
+        if (existingCmd !== newCmd) {
+            userPromptHooks[existingUserPromptIdx] = newUserPrompt;
+            result.userPromptSubmitAdded = true;
+            modified = true;
+        }
+    } else {
+        userPromptHooks.push(newUserPrompt);
         result.userPromptSubmitAdded = true;
         modified = true;
     }
 
-    // Add PreToolUse branch guard
+    // Add PreToolUse guards: block git checkout entirely, guard git switch when alcom has snapshots
     if (!Array.isArray(hooks['PreToolUse'])) {
         hooks['PreToolUse'] = [];
     }
     const preToolUseHooks = hooks['PreToolUse'] as unknown[];
-    if (!isAlcomHookPresent(preToolUseHooks)) {
-        preToolUseHooks.push({
-            matcher: 'Bash',
-            hooks: [
-                {
-                    type: 'command',
-                    command:
-                        'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
-                        'if echo "$cmd" | grep -qE \'git checkout(\\s+-[bB]|\\s+[^\\s-]|\\s*$)\' || echo "$cmd" | grep -qE \'git switch\'; then ' +
-                        'if [ -n "$(alcom log 2>/dev/null)" ]; then ' +
-                        'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "alcomの未完了コミットがあります。alcom logで内容を確認し、不要なスナップショットだけalcom undoで取り消し、残りをalcom finishでまとめてください。undoしすぎた場合はalcom redoで戻せます。"}}\'; ' +
-                        'fi; fi',
-                },
-            ],
+    const existingAlcomIdx = preToolUseHooks.findIndex((h) => {
+        if (typeof h !== 'object' || h === null) return false;
+        const hook = h as Record<string, unknown>;
+        const innerHooks = hook['hooks'];
+        if (!Array.isArray(innerHooks)) return false;
+        return innerHooks.some((inner) => {
+            if (typeof inner !== 'object' || inner === null) return false;
+            const cmd = (inner as Record<string, unknown>)['command'];
+            return typeof cmd === 'string' && cmd.includes('alcom');
         });
+    });
+    const newPreToolUse = {
+        matcher: 'Bash',
+        hooks: [
+            {
+                type: 'command',
+                command:
+                    'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
+                    'if echo "$cmd" | grep -qE \'(^|[[:space:]])git[[:space:]]+checkout([[:space:]]|$)\'; then ' +
+                    'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "git checkout は使用禁止です。ブランチ切替には git switch、ファイル復元には git restore を使用してください。"}}\'; ' +
+                    'fi',
+            },
+            {
+                type: 'command',
+                command:
+                    'cmd=$(jq -r \'.tool_input.command // ""\' 2>/dev/null); ' +
+                    'if echo "$cmd" | grep -qE \'(^|[[:space:]])git[[:space:]]+switch([[:space:]]|$)\'; then ' +
+                    'if [ -n "$(alcom log 2>/dev/null)" ]; then ' +
+                    'printf \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "alcomの未完了スナップショットがあります。ブランチ切替前に alcom status で内容を確認し、作業を保持する場合は alcom finish、作業を破棄する場合は alcom undo してください。"}}\'; ' +
+                    'fi; fi',
+            },
+        ],
+    };
+    if (existingAlcomIdx >= 0) {
+        const existingHook = preToolUseHooks[existingAlcomIdx] as Record<string, unknown>;
+        const existingInner = Array.isArray(existingHook?.['hooks']) ? existingHook['hooks'] as unknown[] : [];
+        const existingCmds = existingInner
+            .map((h) => (typeof h === 'object' && h !== null ? (h as Record<string, unknown>)['command'] : undefined));
+        const newCmds = newPreToolUse.hooks.map((h) => h.command);
+        const sameCommands = existingCmds.length === newCmds.length
+            && existingCmds.every((c, i) => c === newCmds[i]);
+        if (!sameCommands) {
+            preToolUseHooks[existingAlcomIdx] = newPreToolUse;
+            result.preToolUseAdded = true;
+            modified = true;
+        }
+    } else {
+        preToolUseHooks.push(newPreToolUse);
         result.preToolUseAdded = true;
         modified = true;
     }

@@ -46,7 +46,23 @@ describe('setup', () => {
         expect(content.hooks.PreToolUse.length).toBe(1);
     });
 
-    it('does not add duplicate hooks when already configured', async () => {
+    it('registers two PreToolUse hook commands: checkout block and switch guard', async () => {
+        const scriptDir = path.join(TMP_DIR, 'bin');
+        const settingsPath = path.join(TMP_DIR, '.claude', 'settings.json');
+
+        await setup({ project: false, scriptDir, dryRun: false, settingsPathOverride: settingsPath });
+
+        const content = JSON.parse(await readFile(settingsPath, 'utf-8'));
+        const preToolUse = content.hooks.PreToolUse[0];
+        const commands = preToolUse.hooks.map((h: { command: string }) => h.command);
+        expect(commands.length).toBe(2);
+        const hasCheckoutBlock = commands.some((c: string) => c.includes('git checkout'));
+        const hasSwitchGuard = commands.some((c: string) => c.includes('git switch'));
+        expect(hasCheckoutBlock).toBe(true);
+        expect(hasSwitchGuard).toBe(true);
+    });
+
+    it('replaces existing alcom hooks without adding duplicates', async () => {
         const scriptDir = path.join(TMP_DIR, 'bin');
         const settingsPath = path.join(TMP_DIR, '.claude', 'settings.json');
 

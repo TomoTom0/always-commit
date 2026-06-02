@@ -6,7 +6,7 @@
 
 1.  **CLI (`src/index.ts`)**: `commander` を使用してコマンドを解析し、ロジックを制御するエントリーポイントです。
 2.  **状態管理 (`src/state.ts`)**: 一時的なスナップショットを追跡する状態ファイルを管理します。
-3.  **Gitラッパー (`src/git.ts`)**: `simple-git` のラッパーで、Git操作を実行します。
+3.  **Gitラッパー (`src/git.ts`)**: `simple-git` のラッパーで、Git操作を実行します。`CODING_AGENT_ROOT` 環境変数が設定されている場合はそのディレクトリを、未設定の場合は現在の作業ディレクトリをGit作業ディレクトリとして使用します。
 4.  **セットアップ (`src/setup.ts`)**: Claude Code との連携設定（hookスクリプト配置・settings.json登録）を行います。
 
 ## 状態管理
