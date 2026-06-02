@@ -62,7 +62,7 @@ describe('setup', () => {
         expect(hasSwitchGuard).toBe(true);
     });
 
-    it('does not add duplicate hooks when already configured', async () => {
+    it('replaces existing alcom hooks without adding duplicates', async () => {
         const scriptDir = path.join(TMP_DIR, 'bin');
         const settingsPath = path.join(TMP_DIR, '.claude', 'settings.json');
 

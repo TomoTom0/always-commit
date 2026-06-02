@@ -11,8 +11,7 @@ function getGitInstance(): SimpleGit {
         const agentRoot = process.env.CODING_AGENT_ROOT;
         if (agentRoot) {
             if (!existsSync(join(agentRoot, '.git'))) {
-                console.error(`CODING_AGENT_ROOT is set but .git not found: ${agentRoot}`);
-                process.exit(1);
+                throw new Error(`CODING_AGENT_ROOT is set but .git not found: ${agentRoot}`);
             }
             gitInstance = simpleGit(agentRoot);
         } else {
