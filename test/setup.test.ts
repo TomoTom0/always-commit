@@ -69,8 +69,8 @@ describe('setup', () => {
         await setup({ project: false, scriptDir, dryRun: false, settingsPathOverride: settingsPath });
         const result2 = await setup({ project: false, scriptDir, dryRun: false, settingsPathOverride: settingsPath });
 
-        expect(result2.userPromptSubmitAdded).toBe(true);
-        expect(result2.preToolUseAdded).toBe(true);
+        expect(result2.userPromptSubmitAdded).toBe(false);
+        expect(result2.preToolUseAdded).toBe(false);
 
         const content = JSON.parse(await readFile(settingsPath, 'utf-8'));
         expect(content.hooks.UserPromptSubmit.length).toBe(1);

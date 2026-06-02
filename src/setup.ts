@@ -98,9 +98,17 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
         hooks: [{ type: 'command', command: scriptPath }],
     };
     if (existingUserPromptIdx >= 0) {
-        userPromptHooks[existingUserPromptIdx] = newUserPrompt;
-        result.userPromptSubmitAdded = true;
-        modified = true;
+        const existingHook = userPromptHooks[existingUserPromptIdx] as Record<string, unknown>;
+        const existingInner = Array.isArray(existingHook?.['hooks']) ? existingHook['hooks'] as unknown[] : [];
+        const existingCmd = existingInner.length > 0 && typeof existingInner[0] === 'object' && existingInner[0] !== null
+            ? (existingInner[0] as Record<string, unknown>)['command']
+            : undefined;
+        const newCmd = newUserPrompt.hooks[0].command;
+        if (existingCmd !== newCmd) {
+            userPromptHooks[existingUserPromptIdx] = newUserPrompt;
+            result.userPromptSubmitAdded = true;
+            modified = true;
+        }
     } else {
         userPromptHooks.push(newUserPrompt);
         result.userPromptSubmitAdded = true;
@@ -146,9 +154,18 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
         ],
     };
     if (existingAlcomIdx >= 0) {
-        preToolUseHooks[existingAlcomIdx] = newPreToolUse;
-        result.preToolUseAdded = true;
-        modified = true;
+        const existingHook = preToolUseHooks[existingAlcomIdx] as Record<string, unknown>;
+        const existingInner = Array.isArray(existingHook?.['hooks']) ? existingHook['hooks'] as unknown[] : [];
+        const existingCmds = existingInner
+            .map((h) => (typeof h === 'object' && h !== null ? (h as Record<string, unknown>)['command'] : undefined));
+        const newCmds = newPreToolUse.hooks.map((h) => h.command);
+        const sameCommands = existingCmds.length === newCmds.length
+            && existingCmds.every((c, i) => c === newCmds[i]);
+        if (!sameCommands) {
+            preToolUseHooks[existingAlcomIdx] = newPreToolUse;
+            result.preToolUseAdded = true;
+            modified = true;
+        }
     } else {
         preToolUseHooks.push(newPreToolUse);
         result.preToolUseAdded = true;

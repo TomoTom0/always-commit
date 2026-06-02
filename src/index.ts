@@ -44,7 +44,10 @@ function generateAutoMessage(): string {
 
 function summarizeDiffStat(entries: git.DiffEntry[]): string {
     if (entries.length === 0) return '';
-    const parts = entries.map(e => `${e.path} (+${e.added}/-${e.deleted})`);
+    const sorted = [...entries].sort((a, b) =>
+        (b.added + b.deleted) - (a.added + a.deleted)
+    );
+    const parts = sorted.map(e => `${e.path} (+${e.added}/-${e.deleted})`);
     const result = parts.join(', ');
     return result.length > 120 ? result.slice(0, 117) + '...' : result;
 }
