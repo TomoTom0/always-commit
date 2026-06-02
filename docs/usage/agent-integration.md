@@ -89,11 +89,11 @@ chmod +x ~/.local/bin/alcom-save.sh
         "hooks": [
           {
             "type": "command",
-            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE '\\bgit\\s+checkout(\\s+|$)'; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"git checkout は使用禁止です。ブランチ切替には git switch、ファイル復元には git restore を使用してください。\"}}'; fi"
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE '(^|[[:space:]])git[[:space:]]+checkout([[:space:]]|$)'; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"git checkout は使用禁止です。ブランチ切替には git switch、ファイル復元には git restore を使用してください。\"}}'; fi"
           },
           {
             "type": "command",
-            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE '\\bgit\\s+switch(\\s+|$)'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了スナップショットがあります。ブランチ切替前に alcom status で内容を確認し、作業を保持する場合は alcom finish、作業を破棄する場合は alcom undo してください。\"}}'; fi; fi"
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); if echo \"$cmd\" | grep -qE '(^|[[:space:]])git[[:space:]]+switch([[:space:]]|$)'; then if [ -n \"$(alcom log 2>/dev/null)\" ]; then printf '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"alcomの未完了スナップショットがあります。ブランチ切替前に alcom status で内容を確認し、作業を保持する場合は alcom finish、作業を破棄する場合は alcom undo してください。\"}}'; fi; fi"
           }
         ]
       }
