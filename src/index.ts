@@ -60,11 +60,17 @@ function truncateFileList(files: string[], maxFiles: number = 20): string[] {
     return shown;
 }
 
+async function resolveBaseCommit(): Promise<string> {
+    const s = await state.loadState();
+    if (s.baseCommit) return s.baseCommit;
+    return git.findBaseCommit();
+}
+
 async function showCurrentStateSummary(): Promise<void> {
     try {
         const currentState = await state.loadState();
         const remaining = currentState.commits.length;
-        const currentBase = await git.findBaseCommit();
+        const currentBase = await resolveBaseCommit();
         const currentDiff = await git.getDiffNameStatus(currentBase, 'HEAD');
         console.error(`${remaining} snapshot${remaining !== 1 ? 's' : ''} remaining.`);
         if (currentDiff.length > 0) {
@@ -263,29 +269,39 @@ Example:
 
 
             const options = program.opts();
+
+            const currentState = await state.loadState();
+
+            // Determine baseHash for squash, or decide to do a regular commit
             let baseHash: string | undefined;
 
             if (cmdOptions.base) {
+                // Manual base specified → always squash (recovery scenario)
                 baseHash = cmdOptions.base;
-            } else {
-                baseHash = await git.findBaseCommit();
-            }
+            } else if (currentState.commits.length === 0) {
+                // No saves in state — check if alcom commits exist in git history (recovery)
+                const baseFromHistory = await git.findBaseCommit();
+                const currentHead = await git.getCurrentHead();
+                if (baseFromHistory === currentHead) {
+                    // No alcom commits at all → explicit regular commit
+                    if (options.dryRun) {
+                        console.log(`[Dry Run] Would commit changes with message: "${message}"`);
+                        return;
+                    }
 
-            if (!baseHash) {
-                // セッションが存在しない場合は、通常のコミットとして動作
-                if (options.dryRun) {
-                    console.log(`[Dry Run] Would commit changes with message: "${message}"`);
+                    const finalHash = await git.commitAll(message);
+                    console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: finalHash }));
                     return;
                 }
-
-                const finalHash = await git.commitAll(message);
-                console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: finalHash }));
-                return;
+                // Alcom commits exist but state is lost → recovery squash
+                baseHash = baseFromHistory;
+            } else {
+                baseHash = await resolveBaseCommit();
             }
 
             let finalMessage = message;
             if (cmdOptions.append) {
-                const commits = await git.getCommits(baseHash);
+                const commits = await git.getCommits(baseHash!);
                 // Filter for alcom commits and extract messages
                 const commitMessages = commits
                     .filter(c => git.isAlcomCommit(c.message))
@@ -297,27 +313,26 @@ Example:
             }
 
             if (options.dryRun) {
-                console.log(`[Dry Run] Would reset mixed to ${baseHash}, clear state, and commit with message:`);
+                console.log(`[Dry Run] Would squash ${baseHash === git.EMPTY_TREE ? 'orphan' : baseHash} into a single commit with message:`);
                 console.log(finalMessage);
                 return;
             }
 
-            // EMPTY_TREEの場合（リポジトリの全コミットがalcomコミットの場合）
-            // 親なしの新しいルートコミットを作成する
+            // Stage any uncommitted changes, then create a single commit with the
+            // final tree without using reset --mixed (which would restore deleted files).
+            await git.stageAll();
+            const treeHash = await git.writeTree();
+
+            let newCommit: string;
             if (baseHash === git.EMPTY_TREE) {
-                const treeHash = await git.getTreeHash('HEAD');
-                const newCommit = await git.commitTreeOrphan(treeHash, finalMessage);
-                await git.resetHard(newCommit);
-                await state.clearState();
-                console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: newCommit }));
-                return;
+                newCommit = await git.commitTreeOrphan(treeHash, finalMessage);
+            } else {
+                newCommit = await git.commitTree(treeHash, baseHash!, finalMessage);
             }
 
-            await git.resetMixed(baseHash);
+            await git.resetHard(newCommit);
             await state.clearState();
-
-            const finalHash = await git.commitAll(finalMessage);
-            console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: finalHash }));
+            console.log(JSON.stringify({ status: 'ok', action: 'finish', hash: newCommit }));
         } catch (error: any) {
             console.error(JSON.stringify({ status: 'error', message: error.message }));
             process.exit(1);
@@ -527,7 +542,7 @@ Examples:
             if (cmdOptions.base) {
                 baseHash = cmdOptions.base;
             } else {
-                baseHash = await git.findBaseCommit();
+                baseHash = await resolveBaseCommit();
             }
 
             const processedArgs = args.map(arg => arg.replace('@base', baseHash));
@@ -554,7 +569,7 @@ Examples:
 
 async function resolveStatusFromHash(options: { base?: boolean; depth?: number }): Promise<string> {
     if (options.base) {
-        return git.findBaseCommit();
+        return resolveBaseCommit();
     }
 
     const depth = options.depth ?? 1;
@@ -565,12 +580,12 @@ async function resolveStatusFromHash(options: { base?: boolean; depth?: number }
     const commits = currentState.commits;
 
     if (commits.length === 0) {
-        return git.findBaseCommit();
+        return resolveBaseCommit();
     }
 
     const targetIndex = commits.length - 1 - depth;
     if (targetIndex < 0) {
-        return git.findBaseCommit();
+        return resolveBaseCommit();
     }
 
     return commits[targetIndex].hash;
@@ -644,7 +659,7 @@ Example:
   `)
     .action(async (args: string[], cmdOptions) => {
         try {
-            const baseHash = cmdOptions.base || await git.findBaseCommit();
+            const baseHash = cmdOptions.base || await resolveBaseCommit();
 
             const proc = spawn('git', ['--no-pager', 'diff', baseHash, ...args], {
                 stdio: 'inherit',

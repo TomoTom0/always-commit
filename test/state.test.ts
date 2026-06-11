@@ -35,6 +35,23 @@ describe('State Management', () => {
         expect(s.commits[0].message).toBe('msg1');
     });
 
+    it('should record baseCommit on first addCommit', async () => {
+        // hash1 is not a real git object, so getParentHash throws → EMPTY_TREE
+        await state.addCommit('hash1', 'msg1');
+        const s = await state.loadState();
+        expect(s.baseCommit).toBe('4b825dc642cb6eb9a060e54bf8d69288fbee4904'); // EMPTY_TREE
+    });
+
+    it('should not overwrite baseCommit on subsequent addCommit', async () => {
+        await state.addCommit('hash1', 'msg1');
+        const first = await state.loadState();
+        const originalBase = first.baseCommit;
+
+        await state.addCommit('hash2', 'msg2');
+        const second = await state.loadState();
+        expect(second.baseCommit).toBe(originalBase);
+    });
+
     it('should pop a commit', async () => {
         await state.addCommit('hash1', 'msg1');
         await state.addCommit('hash2', 'msg2');
