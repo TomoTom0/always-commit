@@ -94,10 +94,18 @@ export async function saveState(state: State): Promise<void> {
 
 export async function addCommit(hash: string, message: string): Promise<void> {
     const s = await loadState();
-    // Record baseCommit on first save: parent of the first alcom commit = HEAD before save
-    if (s.commits.length === 0 && !s.baseCommit) {
+    // Record/update baseCommit: parent of the first alcom commit = HEAD before save
+    // Always overwrite when commits are empty (handles full-undo → new session)
+    // Also resolve from first commit if missing (handles post-repair saves)
+    if (s.commits.length === 0) {
         try {
             s.baseCommit = await git.getParentHash(hash);
+        } catch {
+            s.baseCommit = git.EMPTY_TREE;
+        }
+    } else if (!s.baseCommit) {
+        try {
+            s.baseCommit = await git.getParentHash(s.commits[0].hash);
         } catch {
             s.baseCommit = git.EMPTY_TREE;
         }

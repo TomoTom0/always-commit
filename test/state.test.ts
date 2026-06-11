@@ -64,6 +64,39 @@ describe('State Management', () => {
         expect(s.commits[0].hash).toBe('hash1');
     });
 
+    it('should overwrite stale baseCommit when all commits are undone then new session starts', async () => {
+        // Simulate a previous session with baseCommit set and commits empty (all undone)
+        const staleState = {
+            commits: [],
+            undoStack: [{ hash: 'old-hash', message: 'old msg', timestamp: 100 }],
+            baseCommit: 'stale-base-commit-value',
+        };
+        await state.saveState(staleState);
+
+        // New session: addCommit should overwrite the stale baseCommit
+        await state.addCommit('new-hash', 'new msg');
+        const s = await state.loadState();
+        expect(s.baseCommit).toBe('4b825dc642cb6eb9a060e54bf8d69288fbee4904'); // EMPTY_TREE (overwritten)
+        expect(s.commits).toHaveLength(1);
+        expect(s.commits[0].hash).toBe('new-hash');
+    });
+
+    it('should resolve baseCommit from first commit when missing (post-repair)', async () => {
+        // Simulate a repaired session: commits exist but baseCommit is undefined
+        const repairedState = {
+            commits: [{ hash: 'repair-hash', message: 'repaired', timestamp: 100 }],
+            undoStack: [],
+            // baseCommit intentionally omitted
+        };
+        await state.saveState(repairedState);
+
+        // Next addCommit should detect missing baseCommit and resolve from first commit
+        await state.addCommit('hash2', 'msg2');
+        const s = await state.loadState();
+        expect(s.baseCommit).toBe('4b825dc642cb6eb9a060e54bf8d69288fbee4904'); // EMPTY_TREE (resolved)
+        expect(s.commits).toHaveLength(2);
+    });
+
     it('should clear state', async () => {
         await state.addCommit('hash1', 'msg1');
         await state.clearState();
