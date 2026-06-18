@@ -52,6 +52,7 @@ export interface Commit {
 export interface State {
     commits: Commit[];
     undoStack: Commit[];
+    baseCommit?: string;
 }
 
 const defaultState: State = {
@@ -63,7 +64,7 @@ export async function loadState(): Promise<State> {
     const statePath = await getStatePath();
     if (await fs.pathExists(statePath)) {
         const raw = await fs.readJson(statePath);
-        return { commits: raw.commits ?? [], undoStack: raw.undoStack ?? [] };
+        return { commits: raw.commits ?? [], undoStack: raw.undoStack ?? [], baseCommit: raw.baseCommit };
     }
     return { commits: [], undoStack: [] };
 }
@@ -92,14 +93,30 @@ export async function saveState(state: State): Promise<void> {
 }
 
 export async function addCommit(hash: string, message: string): Promise<void> {
-    const state = await loadState();
-    state.commits.push({
+    const s = await loadState();
+    // Record/update baseCommit: parent of the first alcom commit = HEAD before save
+    // Always overwrite when commits are empty (handles full-undo → new session)
+    // Also resolve from first commit if missing (handles post-repair saves)
+    if (s.commits.length === 0) {
+        try {
+            s.baseCommit = await git.getParentHash(hash);
+        } catch {
+            s.baseCommit = git.EMPTY_TREE;
+        }
+    } else if (!s.baseCommit) {
+        try {
+            s.baseCommit = await git.getParentHash(s.commits[0].hash);
+        } catch {
+            s.baseCommit = git.EMPTY_TREE;
+        }
+    }
+    s.commits.push({
         hash,
         message,
         timestamp: Date.now(),
     });
-    state.undoStack = [];
-    await saveState(state);
+    s.undoStack = [];
+    await saveState(s);
 }
 
 export async function popCommit(): Promise<Commit | undefined> {

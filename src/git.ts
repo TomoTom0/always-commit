@@ -51,6 +51,15 @@ export async function resetMixed(hash: string): Promise<void> {
     await git.reset(['--mixed', hash]);
 }
 
+export async function stageAll(): Promise<void> {
+    await git.add(['-A']);
+}
+
+export async function writeTree(): Promise<string> {
+    const result = await git.raw(['write-tree']);
+    return result.trim();
+}
+
 export async function getCurrentHead(): Promise<string> {
     const result = await git.revparse(['HEAD']);
     return result.trim();
