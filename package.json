@@ -1,6 +1,6 @@
 {
   "name": "always-commit",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "LLM-assisted coding session snapshot management tool - automatic temporary commits during sessions",
   "type": "module",
   "license": "MIT",
