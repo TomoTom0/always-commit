@@ -34,7 +34,7 @@ test('finish preserves file deletion via git rm with intermediate save', async (
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('finish preserves file deletion via git rm without intermediate save', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-test-rm2-'));
@@ -65,4 +65,4 @@ test('finish preserves file deletion via git rm without intermediate save', asyn
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});

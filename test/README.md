@@ -5,6 +5,7 @@
 - **vitest** で実行
 - 実行コマンド: `pnpm test`（`vitest run` 相当）
 - 個別実行: `pnpm test test/<ファイル名>.test.ts`
+- タイムアウト: `vitest.config.ts` の `testTimeout: 60000` で全テスト共通設定（WSL2等での `tsx` 起動コスト吸収）
 
 ## ディレクトリ構成
 

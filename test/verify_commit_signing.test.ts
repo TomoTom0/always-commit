@@ -63,7 +63,7 @@ test.skipIf(!gitSshSigningAvailable())('finish produces a signed commit when com
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('finish leaves commit unsigned when commit.gpgsign=false', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-nosign-'));
@@ -83,7 +83,7 @@ test('finish leaves commit unsigned when commit.gpgsign=false', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test.skipIf(!gitSshSigningAvailable())('save produces a signed commit when commit.gpgsign=true with ssh key', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-save-sign-'));
@@ -99,4 +99,4 @@ test.skipIf(!gitSshSigningAvailable())('save produces a signed commit when commi
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
