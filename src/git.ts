@@ -33,9 +33,21 @@ export const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
 export async function commitAll(message: string, allowEmpty: boolean = false): Promise<string> {
     await git.add(['-A']);
-    const options = allowEmpty ? { '--allow-empty': null } : {};
-    const result = await git.commit(message, undefined, options as any);
+    const options: any = allowEmpty ? { '--allow-empty': null } : {};
+    if (await isCommitSigningEnabled()) {
+        options['-S'] = null;
+    }
+    const result = await git.commit(message, undefined, options);
     return result.commit;
+}
+
+export async function isCommitSigningEnabled(): Promise<boolean> {
+    try {
+        const result = await git.raw(['config', '--bool', 'commit.gpgsign']);
+        return result.trim() === 'true';
+    } catch {
+        return false;
+    }
 }
 
 export async function hasChanges(): Promise<boolean> {
@@ -106,12 +118,20 @@ export async function getCommits(baseHash: string, headHash: string = 'HEAD'): P
 }
 
 export async function commitTree(treeHash: string, parentHash: string, message: string): Promise<string> {
-    const result = await git.raw(['commit-tree', treeHash, '-p', parentHash, '-m', message]);
+    const args = ['commit-tree', treeHash, '-p', parentHash, '-m', message];
+    if (await isCommitSigningEnabled()) {
+        args.push('-S');
+    }
+    const result = await git.raw(args);
     return result.trim();
 }
 
 export async function commitTreeOrphan(treeHash: string, message: string): Promise<string> {
-    const result = await git.raw(['commit-tree', treeHash, '-m', message]);
+    const args = ['commit-tree', treeHash, '-m', message];
+    if (await isCommitSigningEnabled()) {
+        args.push('-S');
+    }
+    const result = await git.raw(args);
     return result.trim();
 }
 
