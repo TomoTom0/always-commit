@@ -32,4 +32,4 @@ test('state file recovery from git history', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});

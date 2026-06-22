@@ -34,7 +34,7 @@ test('undo shows remaining snapshot count and status summary on stderr', async (
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('undo shows "0 snapshots remaining" when all undone', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-undo-last-'));
@@ -56,7 +56,7 @@ test('undo shows "0 snapshots remaining" when all undone', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('redo shows remaining snapshot count and status summary on stderr', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-redo-summary-'));
@@ -82,7 +82,7 @@ test('redo shows remaining snapshot count and status summary on stderr', async (
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('status --short shows file count and truncated list', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-short-'));
@@ -106,7 +106,7 @@ test('status --short shows file count and truncated list', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('status --short shows all files when few', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-short-few-'));
@@ -130,7 +130,7 @@ test('status --short shows all files when few', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('status --short shows "No changes" when clean', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-short-clean-'));
@@ -150,7 +150,7 @@ test('status --short shows "No changes" when clean', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('status default mode is unchanged (piped git output)', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-default-'));
@@ -171,7 +171,7 @@ test('status default mode is unchanged (piped git output)', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('status default compares with previous snapshot', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-prev-'));
@@ -200,7 +200,7 @@ test('status default compares with previous snapshot', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('status --depth 2 compares with 2 snapshots ago', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-depth2-'));
@@ -231,7 +231,7 @@ test('status --depth 2 compares with 2 snapshots ago', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('status --base compares with session start', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-base-'));
@@ -258,7 +258,7 @@ test('status --base compares with session start', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('status depth exceeding snapshots falls back to base', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-depth-fallback-'));
@@ -280,7 +280,7 @@ test('status depth exceeding snapshots falls back to base', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('status --depth with invalid value shows error', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-status-invalid-depth-'));
@@ -307,7 +307,7 @@ test('status --depth with invalid value shows error', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('log strips --alcom-- prefix', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-log-prefix-'));
@@ -328,7 +328,7 @@ test('log strips --alcom-- prefix', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('log --long shows full message without truncation', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-log-long-'));
@@ -350,7 +350,7 @@ test('log --long shows full message without truncation', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('log default truncation is 60 characters', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-log-trunc-'));
@@ -373,7 +373,7 @@ test('log default truncation is 60 characters', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('CODING_AGENT_ROOT overrides working directory', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-agent-root-'));
@@ -399,7 +399,7 @@ test('CODING_AGENT_ROOT overrides working directory', async () => {
         await rm(tmpDir, { recursive: true, force: true });
         await rm(workDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('CODING_AGENT_ROOT with missing .git produces error', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-agent-root-no-git-'));
@@ -418,4 +418,4 @@ test('CODING_AGENT_ROOT with missing .git produces error', async () => {
         await rm(tmpDir, { recursive: true, force: true });
         await rm(workDir, { recursive: true, force: true });
     }
-}, 60000);
+});

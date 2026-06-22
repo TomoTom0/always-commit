@@ -59,7 +59,7 @@ test('finish includes all changes after merge commit between saves', async () =>
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('status shows all changes after merge commit', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-test-'));
@@ -98,7 +98,7 @@ test('status shows all changes after merge commit', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('diff shows all changes after merge commit', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-test-'));
@@ -140,4 +140,4 @@ test('diff shows all changes after merge commit', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});

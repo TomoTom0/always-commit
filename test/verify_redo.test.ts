@@ -37,7 +37,7 @@ test('redo restores the last undone snapshot', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('consecutive redo restores multiple undone snapshots', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-redo-multi-'));
@@ -74,7 +74,7 @@ test('consecutive redo restores multiple undone snapshots', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('redo without undo returns error', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-redo-none-'));
@@ -94,7 +94,7 @@ test('redo without undo returns error', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('save after undo clears redo stack', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-redo-clear-'));
@@ -124,7 +124,7 @@ test('save after undo clears redo stack', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
 
 test('redo error when uncommitted changes exist', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-redo-dirty-'));
@@ -154,4 +154,4 @@ test('redo error when uncommitted changes exist', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
