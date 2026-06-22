@@ -6,9 +6,23 @@ import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { alcomOrThrow, gitInit, shOrThrow } from './helpers';
 
-function sshKeygenAvailable(): boolean {
-    const r = spawnSync('ssh-keygen', ['-V'], { encoding: 'utf-8' });
-    return r.status === 0 || /usage/i.test(r.stderr) || /unknown/i.test(r.stderr);
+function gitSshSigningAvailable(): boolean {
+    try {
+        const r = spawnSync('ssh-keygen', ['-V'], { encoding: 'utf-8' });
+        const sshAvailable = r.status === 0 || /usage/i.test(r.stderr) || /unknown/i.test(r.stderr);
+        if (!sshAvailable) return false;
+
+        const gitVer = spawnSync('git', ['--version'], { encoding: 'utf-8' });
+        const match = gitVer.stdout.match(/git version (\d+)\.(\d+)/);
+        if (match) {
+            const major = parseInt(match[1], 10);
+            const minor = parseInt(match[2], 10);
+            return major > 2 || (major === 2 && minor >= 34);
+        }
+    } catch {
+        return false;
+    }
+    return false;
 }
 
 async function setupSigningRepo(tmpDir: string): Promise<void> {
@@ -28,12 +42,7 @@ async function setupSigningRepo(tmpDir: string): Promise<void> {
     shOrThrow('git', ['config', 'commit.gpgsign', 'true'], { cwd: tmpDir });
 }
 
-test('finish produces a signed commit when commit.gpgsign=true with ssh key', async () => {
-    if (!sshKeygenAvailable()) {
-        console.warn('ssh-keygen not available — skipping signing test');
-        return;
-    }
-
+test.skipIf(!gitSshSigningAvailable())('finish produces a signed commit when commit.gpgsign=true with ssh key', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-sign-'));
     try {
         gitInit(tmpDir);
@@ -76,12 +85,7 @@ test('finish leaves commit unsigned when commit.gpgsign=false', async () => {
     }
 }, 60000);
 
-test('save produces a signed commit when commit.gpgsign=true with ssh key', async () => {
-    if (!sshKeygenAvailable()) {
-        console.warn('ssh-keygen not available — skipping signing test');
-        return;
-    }
-
+test.skipIf(!gitSshSigningAvailable())('save produces a signed commit when commit.gpgsign=true with ssh key', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'alcom-save-sign-'));
     try {
         gitInit(tmpDir);
