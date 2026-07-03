@@ -105,13 +105,41 @@ export async function getCommits(baseHash: string, headHash: string = 'HEAD'): P
     return parseGitLog(rawLog);
 }
 
+/**
+ * Parse a git config value as a boolean enable flag (for `commit.gpgsign`).
+ * `commit-tree` (plumbing) ignores `commit.gpgsign`, so we read the setting
+ * ourselves and pass `-S` explicitly when it is enabled.
+ */
+export function isGpgSignEnabled(configValue: string): boolean {
+    const v = configValue.trim().toLowerCase();
+    return v === 'true' || v === '1' || v === 'yes' || v === 'on';
+}
+
+async function shouldSign(): Promise<boolean> {
+    try {
+        const result = await git.raw(['config', '--get', 'commit.gpgsign']);
+        return isGpgSignEnabled(result);
+    } catch {
+        // Setting absent or git unavailable — default to no signing.
+        return false;
+    }
+}
+
 export async function commitTree(treeHash: string, parentHash: string, message: string): Promise<string> {
-    const result = await git.raw(['commit-tree', treeHash, '-p', parentHash, '-m', message]);
+    const args = ['commit-tree', treeHash, '-p', parentHash, '-m', message];
+    if (await shouldSign()) {
+        args.push('-S');
+    }
+    const result = await git.raw(args);
     return result.trim();
 }
 
 export async function commitTreeOrphan(treeHash: string, message: string): Promise<string> {
-    const result = await git.raw(['commit-tree', treeHash, '-m', message]);
+    const args = ['commit-tree', treeHash, '-m', message];
+    if (await shouldSign()) {
+        args.push('-S');
+    }
+    const result = await git.raw(args);
     return result.trim();
 }
 
