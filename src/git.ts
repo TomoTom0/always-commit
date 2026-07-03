@@ -106,19 +106,20 @@ export async function getCommits(baseHash: string, headHash: string = 'HEAD'): P
 }
 
 /**
- * Parse a git config value as a boolean enable flag (for `commit.gpgsign`).
+ * Whether commits should be GPG-signed for the current repository.
  * `commit-tree` (plumbing) ignores `commit.gpgsign`, so we read the setting
  * ourselves and pass `-S` explicitly when it is enabled.
+ *
+ * Delegating parsing to `git config --get --bool` makes the result match git's
+ * own boolean semantics exactly (e.g. a bare `[commit] gpgsign` defaults to
+ * true, and positive integers like `2` are true), instead of a fragile manual
+ * interpretation. An absent setting makes `git config` exit non-zero, which
+ * falls through to the catch and returns false.
  */
-export function isGpgSignEnabled(configValue: string): boolean {
-    const v = configValue.trim().toLowerCase();
-    return v === 'true' || v === '1' || v === 'yes' || v === 'on';
-}
-
 async function shouldSign(): Promise<boolean> {
     try {
-        const result = await git.raw(['config', '--get', 'commit.gpgsign']);
-        return isGpgSignEnabled(result);
+        const result = await git.raw(['config', '--get', '--bool', 'commit.gpgsign']);
+        return result.trim() === 'true';
     } catch {
         // Setting absent or git unavailable — default to no signing.
         return false;
