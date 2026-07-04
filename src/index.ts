@@ -273,7 +273,7 @@ Example:
             const currentState = await state.loadState();
 
             // Determine baseHash for squash, or decide to do a regular commit
-            let baseHash: string | undefined;
+            let baseHash: string;
 
             if (cmdOptions.base) {
                 // Manual base specified → always squash (recovery scenario)
@@ -301,7 +301,7 @@ Example:
 
             let finalMessage = message;
             if (cmdOptions.append) {
-                const commits = await git.getCommits(baseHash!);
+                const commits = await git.getCommits(baseHash);
                 // Filter for alcom commits and extract messages
                 const commitMessages = commits
                     .filter(c => git.isAlcomCommit(c.message))
@@ -327,7 +327,7 @@ Example:
             if (baseHash === git.EMPTY_TREE) {
                 newCommit = await git.commitTreeOrphan(treeHash, finalMessage);
             } else {
-                newCommit = await git.commitTree(treeHash, baseHash!, finalMessage);
+                newCommit = await git.commitTree(treeHash, baseHash, finalMessage);
             }
 
             await git.resetHard(newCommit);
