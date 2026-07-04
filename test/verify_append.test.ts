@@ -28,4 +28,4 @@ test('finish --append includes alcom save messages', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});

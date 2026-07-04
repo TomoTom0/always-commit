@@ -31,4 +31,4 @@ test('finish works as normal commit without prior saves', async () => {
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});

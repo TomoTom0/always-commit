@@ -21,6 +21,7 @@
 
 ```typescript
 interface State {
+  baseCommit?: string;  // セッション開始前のコミットハッシュ（初回save時に記録）
   commits: {
     hash: string;      // 完全なSHA-1ハッシュ
     message: string;   // コミットメッセージ

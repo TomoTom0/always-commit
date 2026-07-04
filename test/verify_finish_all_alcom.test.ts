@@ -46,4 +46,4 @@ test('finish creates orphan root commit when all commits are alcom', async () =>
     } finally {
         await rm(tmpDir, { recursive: true, force: true });
     }
-}, 60000);
+});
