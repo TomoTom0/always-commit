@@ -6,7 +6,7 @@
 
 ## Bug Fixes
 
-- `alcom finish` / `alcom save` が `git commit-tree`（plumbing）を使用するため `commit.gpgsign=true` 設定が無視され、署名設定を有効化していてもコミットが署名されない問題を修正。`commit.gpgsign` を検出し `-S` フラグを付与するようにした (#28)
+（変更内容をここに記載）
 
 ## Changes
 
