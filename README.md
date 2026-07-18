@@ -21,8 +21,8 @@ npx always-commit <command>
 ```bash
 git clone https://github.com/TomoTom0/always-commit.git
 cd always-commit
-bun install
-bun link
+pnpm install
+pnpm run install:global
 ```
 
 ## 使い方
