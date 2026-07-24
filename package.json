@@ -1,6 +1,6 @@
 {
   "name": "always-commit",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "LLM-assisted coding session snapshot management tool - automatic temporary commits during sessions",
   "type": "module",
   "license": "MIT",
@@ -38,7 +38,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "vitest run",
-    "install:global": "pnpm run build && npm install -g .",
+    "install:global": "pnpm run build && pnpm link --global",
     "prepublishOnly": "pnpm run build"
   },
   "engines": {
