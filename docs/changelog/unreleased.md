@@ -26,7 +26,7 @@
 
 ## Internal Improvements
 
-（変更内容をここに記載）
+- 開発用グローバルインストール（`install:global`）の前提条件として、Corepack 環境での `pnpm setup` 実行を README に明記。`pnpm link --global` が `ERR_PNPM_NO_GLOBAL_BIN_DIR` で失敗する新規環境での導入トラブルを防止 (#38 レビュー指摘対応)
 
 ## Known Issues
 
