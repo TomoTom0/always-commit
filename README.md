@@ -25,6 +25,8 @@ pnpm install
 pnpm run install:global
 ```
 
+> **前提条件**: `install:global` は `pnpm link --global` を使用します。Corepack 経由で pnpm を有効化しており `PNPM_HOME` / グローバル bin ディレクトリが未設定の環境では、あらかじめ `pnpm setup` を実行してシェルを再起動してください。未設定のまま実行すると `ERR_PNPM_NO_GLOBAL_BIN_DIR` が発生してインストールに失敗します。
+
 ## 使い方
 
 `always-commit` または短縮エイリアス `alcom` コマンドが使用できます。
